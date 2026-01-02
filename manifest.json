@@ -1,0 +1,14 @@
+{
+  "id": "com.ncsender.replicator",
+  "name": "Replicator",
+  "version": "0.1.0",
+  "minAppVersion": "0.3.103",
+  "author": "ncSender",
+  "description": "Replicate loaded G-code program in a grid pattern",
+  "entry": "index.js",
+  "icon": "logo.png",
+  "category": "gcode-generator",
+  "repository": "",
+  "events": [],
+  "permissions": ["gcode.modify"]
+}
