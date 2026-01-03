@@ -651,6 +651,23 @@ function showReplicatorDialog(ctx, params) {
           return result;
         }
 
+        // G-code comment detection
+        function isGcodeComment(command) {
+          const trimmed = command.trim();
+          const withoutLineNumber = trimmed.replace(/^N\\d+\\s*/i, '');
+          if (withoutLineNumber.startsWith(';')) return true;
+          if (withoutLineNumber.startsWith('(') && withoutLineNumber.endsWith(')')) return true;
+          return false;
+        }
+
+        // M5 spindle stop detection (matches M5, M05, N100 M5, etc. but not M50, M500)
+        const SPINDLE_STOP_PATTERN = /(?:^|[^A-Z0-9])M0*5(?:[^0-9]|$)/i;
+        function isSpindleStopCommand(command) {
+          if (!command || typeof command !== 'string') return false;
+          if (isGcodeComment(command)) return false;
+          return SPINDLE_STOP_PATTERN.test(command.trim().toUpperCase());
+        }
+
         function parseToolSegments(gcode) {
           const lines = gcode.split('\\n');
           const segments = [];
@@ -751,11 +768,18 @@ function showReplicatorDialog(ctx, params) {
               for (const toolSeg of toolSegments) {
                 output.push('; ========== Tool T' + toolSeg.toolNum + ' - All Parts ==========');
 
-                for (const pos of positions) {
+                for (let posIndex = 0; posIndex < positions.length; posIndex++) {
+                  const pos = positions[posIndex];
+                  const isLastPosition = posIndex === positions.length - 1;
+
                   output.push('; ----- T' + toolSeg.toolNum + ' Part ' + pos.partNum + ' (Row ' + pos.row + ', Col ' + pos.col + ') -----');
                   output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
                   for (const line of toolSeg.lines) {
+                    // Skip M5 (spindle stop) for non-last positions - keep spindle running between parts
+                    if (!isLastPosition && isSpindleStopCommand(line)) {
+                      continue;
+                    }
                     output.push(applyOffset(line, pos.offsetX, pos.offsetY));
                   }
                   output.push('');
