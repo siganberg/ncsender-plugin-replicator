@@ -1,3 +1,20 @@
+/*
+ * This file is part of ncSender.
+ *
+ * ncSender is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ncSender is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ncSender. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * Replicator Plugin
  * Replicates loaded G-code program in a grid pattern
@@ -257,16 +274,13 @@ function showReplicatorDialog(ctx, params) {
     /* html */ `
     <style>
       .replicator-layout {
-        display: flex;
-        flex-direction: column;
-        max-width: 600px;
-        width: 100%;
-      }
-      .form-column {
-        padding: 20px;
+        display: grid;
+        grid-template-columns: 320px 280px;
+        gap: 12px;
+        padding: 16px;
       }
       .plugin-dialog-footer {
-        padding: 16px 20px;
+        padding: 12px 16px;
         border-top: 1px solid var(--color-border);
         background: var(--color-surface);
       }
@@ -274,16 +288,16 @@ function showReplicatorDialog(ctx, params) {
         background: var(--color-surface-muted);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-medium);
-        padding: 20px;
-        margin-bottom: 16px;
+        padding: 16px;
+        margin-bottom: 0;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
       .form-card-title {
-        font-size: 1rem;
+        font-size: 0.95rem;
         font-weight: 600;
         color: var(--color-text-primary);
-        margin-bottom: 16px;
-        padding-bottom: 12px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
         border-bottom: 1px solid var(--color-border);
         text-align: center;
       }
@@ -296,30 +310,37 @@ function showReplicatorDialog(ctx, params) {
         border-top: 1px solid var(--color-border);
         text-align: center;
       }
+      .summary-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
       .summary-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px 16px;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        flex: 1;
+        align-content: center;
       }
       .summary-row {
         display: flex;
         flex-direction: column;
         gap: 2px;
+        text-align: center;
       }
       .summary-label {
-        font-size: 0.75rem;
-        color: var(--color-text-secondary);
+        font-size: 0.9rem;
+        color: var(--color-text-primary);
       }
       .summary-value {
-        font-size: 0.85rem;
-        font-weight: 600;
+        font-size: 0.9rem;
         color: var(--color-accent);
       }
       .form-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 16px;
+        gap: 12px;
+        margin-bottom: 12px;
       }
       .form-group {
         display: flex;
@@ -333,13 +354,13 @@ function showReplicatorDialog(ctx, params) {
         text-align: center;
       }
       input[type="number"], select {
-        padding: 8px;
+        padding: 6px 8px;
         text-align: center;
         width: 100%;
         box-sizing: border-box;
         border: 1px solid var(--color-border);
         border-radius: var(--radius-small);
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         background: var(--color-surface);
         color: var(--color-text-primary);
       }
@@ -348,13 +369,14 @@ function showReplicatorDialog(ctx, params) {
         border-color: var(--color-accent);
       }
       .validation-message {
+        grid-column: 1 / -1;
         background: #dc354520;
         border: 1px solid #dc3545;
         border-radius: var(--radius-small);
         padding: 12px;
-        margin-top: 16px;
         color: #dc3545;
         font-size: 0.85rem;
+        text-align: center;
         display: none;
       }
       .validation-message.show {
@@ -415,24 +437,58 @@ function showReplicatorDialog(ctx, params) {
         color: var(--color-text-secondary);
         margin-left: 26px;
       }
+      .slider-toggle {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        background: var(--color-surface-muted);
+        border: 1px solid var(--color-border);
+        border-radius: 20px;
+        padding: 4px;
+        cursor: pointer;
+        user-select: none;
+        width: fit-content;
+        margin: 0 auto;
+      }
+      .slider-option {
+        position: relative;
+        padding: 6px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        transition: color 0.2s ease;
+        z-index: 1;
+      }
+      .slider-option.active {
+        color: var(--color-text-primary);
+      }
+      .slider-indicator {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        background: var(--color-accent);
+        border-radius: 16px;
+        transition: all 0.3s ease;
+        z-index: 0;
+      }
     </style>
 
     <div class="replicator-layout">
-      <div class="form-column">
-        <form id="replicatorForm" novalidate>
-          <div class="form-card">
-            <div class="form-card-title">Configuration</div>
+      <form id="replicatorForm" novalidate>
+        <div class="form-card">
+          <div class="form-card-title">Configuration</div>
             <div class="form-row">
               <div class="form-group">
                 <label for="columns">Columns (X)</label>
                 <input type="number" id="columns" min="1" max="50" step="1" value="${settings.columns}" required>
               </div>
               <div class="form-group">
-                <label for="columnDirection">X Direction</label>
-                <select id="columnDirection">
-                  <option value="positive" ${settings.columnDirection === 'positive' ? 'selected' : ''}>Positive (+X)</option>
-                  <option value="negative" ${settings.columnDirection === 'negative' ? 'selected' : ''}>Negative (-X)</option>
-                </select>
+                <label>X Direction</label>
+                <div class="slider-toggle" id="columnDirection" data-value="${settings.columnDirection}">
+                  <span class="slider-option ${settings.columnDirection === 'negative' ? 'active' : ''}" data-value="negative">−</span>
+                  <span class="slider-option ${settings.columnDirection === 'positive' ? 'active' : ''}" data-value="positive">+</span>
+                  <div class="slider-indicator"></div>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -441,11 +497,12 @@ function showReplicatorDialog(ctx, params) {
                 <input type="number" id="rows" min="1" max="50" step="1" value="${settings.rows}" required>
               </div>
               <div class="form-group">
-                <label for="rowDirection">Y Direction</label>
-                <select id="rowDirection">
-                  <option value="positive" ${settings.rowDirection === 'positive' ? 'selected' : ''}>Positive (+Y)</option>
-                  <option value="negative" ${settings.rowDirection === 'negative' ? 'selected' : ''}>Negative (-Y)</option>
-                </select>
+                <label>Y Direction</label>
+                <div class="slider-toggle" id="rowDirection" data-value="${settings.rowDirection}">
+                  <span class="slider-option ${settings.rowDirection === 'negative' ? 'active' : ''}" data-value="negative">−</span>
+                  <span class="slider-option ${settings.rowDirection === 'positive' ? 'active' : ''}" data-value="positive">+</span>
+                  <div class="slider-indicator"></div>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -458,44 +515,43 @@ function showReplicatorDialog(ctx, params) {
                 <input type="number" id="gapY" min="0" step="0.1" value="${settings.gapY}" required>
               </div>
             </div>
-            <div class="checkbox-row" style="margin-top: 8px;">
-              <label class="checkbox-label">
-                <input type="checkbox" id="sortByTool" ${settings.sortByTool ? 'checked' : ''}>
-                <span class="checkbox-text">Sort by Tool</span>
-              </label>
-              <span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>
-            </div>
+          <div class="checkbox-row" style="margin-top: 8px;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="sortByTool" ${settings.sortByTool ? 'checked' : ''}>
+              <span class="checkbox-text">Sort by Tool</span>
+            </label>
+            <span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>
           </div>
+        </div>
+      </form>
 
-          <div class="form-card">
-            <div class="form-card-title">Summary</div>
-            <div class="summary-grid">
-              <div class="summary-row">
-                <span class="summary-label">Source File:</span>
-                <span class="summary-value">${filename}</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Part Size:</span>
-                <span class="summary-value">${convertToDisplay(partWidth).toFixed(1)} x ${convertToDisplay(partHeight).toFixed(1)} ${distanceUnit}</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Machine Limits:</span>
-                <span class="summary-value">${convertToDisplay(machineLimits.x).toFixed(0)} x ${convertToDisplay(machineLimits.y).toFixed(0)} ${distanceUnit}</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Total Replicas:</span>
-                <span class="summary-value" id="totalParts">-</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Grid Size:</span>
-                <span class="summary-value" id="gridSize">-</span>
-              </div>
-            </div>
+      <div class="form-card summary-card">
+        <div class="form-card-title">Summary</div>
+        <div class="summary-grid">
+          <div class="summary-row">
+            <span class="summary-label">Source File:</span>
+            <span class="summary-value">${filename}</span>
           </div>
-
-          <div class="validation-message" id="validationMessage"></div>
-        </form>
+          <div class="summary-row">
+            <span class="summary-label">Part Size:</span>
+            <span class="summary-value">${convertToDisplay(partWidth).toFixed(1)} x ${convertToDisplay(partHeight).toFixed(1)} ${distanceUnit}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Machine Limits:</span>
+            <span class="summary-value">${convertToDisplay(machineLimits.x).toFixed(0)} x ${convertToDisplay(machineLimits.y).toFixed(0)} ${distanceUnit}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Total Replicas:</span>
+            <span class="summary-value" id="totalParts">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Grid Size:</span>
+            <span class="summary-value" id="gridSize">-</span>
+          </div>
+        </div>
       </div>
+
+      <div class="validation-message" id="validationMessage"></div>
     </div>
 
     <div class="plugin-dialog-footer">
@@ -742,14 +798,46 @@ function showReplicatorDialog(ctx, params) {
           return output.join('\\n');
         }
 
-        // Add listeners
-        ['rows', 'columns', 'gapX', 'gapY', 'rowDirection', 'columnDirection'].forEach(id => {
+        // Add listeners for inputs
+        ['rows', 'columns', 'gapX', 'gapY'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
             el.addEventListener('input', updatePreview);
             el.addEventListener('change', updatePreview);
           }
         });
+
+        // Initialize slider toggles
+        const initSliderToggle = (toggleId) => {
+          const toggle = document.getElementById(toggleId);
+          if (!toggle) return;
+
+          const options = toggle.querySelectorAll('.slider-option');
+          const indicator = toggle.querySelector('.slider-indicator');
+
+          const updateIndicator = (activeOption) => {
+            indicator.style.left = activeOption.offsetLeft + 'px';
+            indicator.style.width = activeOption.getBoundingClientRect().width + 'px';
+          };
+
+          options.forEach((option) => {
+            option.addEventListener('click', () => {
+              options.forEach((opt) => opt.classList.remove('active'));
+              option.classList.add('active');
+              toggle.dataset.value = option.dataset.value;
+              updateIndicator(option);
+              updatePreview();
+            });
+          });
+
+          const activeOption = toggle.querySelector('.slider-option.active');
+          if (activeOption) {
+            setTimeout(() => updateIndicator(activeOption), 0);
+          }
+        };
+
+        initSliderToggle('columnDirection');
+        initSliderToggle('rowDirection');
 
         // Initial preview
         updatePreview();
@@ -760,8 +848,8 @@ function showReplicatorDialog(ctx, params) {
 
           const rows = parseInt(document.getElementById('rows').value);
           const columns = parseInt(document.getElementById('columns').value);
-          const rowDirection = document.getElementById('rowDirection').value;
-          const columnDirection = document.getElementById('columnDirection').value;
+          const rowDirection = document.getElementById('rowDirection').dataset.value;
+          const columnDirection = document.getElementById('columnDirection').dataset.value;
           const gapX = parseFloat(document.getElementById('gapX').value);
           const gapY = parseFloat(document.getElementById('gapY').value);
           const sortByTool = document.getElementById('sortByTool').checked;
@@ -833,7 +921,7 @@ function showReplicatorDialog(ctx, params) {
       })();
     </script>
     `,
-    { closable: true, width: '600px' }
+    { closable: true, width: 'auto' }
   );
 }
 
