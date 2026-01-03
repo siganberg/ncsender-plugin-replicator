@@ -1,4 +1,5 @@
 ## What's Changed
 
-### 🔧 Improvements
-- Updated minimum app version requirement to 0.3.105 for improved compatibility
+### Bug Fixes
+- Fixed an issue causing extra M5 commands to be generated
+- Various bug fixes and stability improvements
