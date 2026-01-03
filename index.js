@@ -187,7 +187,8 @@ export async function onLoad(ctx) {
       columnDirection: savedSettings.columnDirection ?? 'positive',
       gapX: convertToDisplay(savedSettings.gapX ?? 5),
       gapY: convertToDisplay(savedSettings.gapY ?? 5),
-      sortByTool: savedSettings.sortByTool ?? false
+      sortByTool: savedSettings.sortByTool ?? false,
+      skipInstances: savedSettings.skipInstances ?? ''
     };
 
     showReplicatorDialog(ctx, {
@@ -353,7 +354,7 @@ function showReplicatorDialog(ctx, params) {
         color: var(--color-text-primary);
         text-align: center;
       }
-      input[type="number"], select {
+      input[type="number"], input[type="text"], select {
         padding: 6px 8px;
         text-align: center;
         width: 100%;
@@ -367,6 +368,38 @@ function showReplicatorDialog(ctx, params) {
       input:focus, select:focus {
         outline: none;
         border-color: var(--color-accent);
+      }
+      input.input-error {
+        border-color: #dc3545;
+      }
+      .validation-tooltip {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #dc3545;
+        color: white;
+        padding: 8px 12px;
+        border-radius: var(--radius-small);
+        font-size: 0.8rem;
+        margin-top: 4px;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        display: none;
+      }
+      .validation-tooltip::before {
+        content: '';
+        position: absolute;
+        top: -4px;
+        left: 20px;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 4px solid #dc3545;
+      }
+      .form-group.has-error .validation-tooltip {
+        display: block;
       }
       .validation-message {
         grid-column: 1 / -1;
@@ -522,6 +555,12 @@ function showReplicatorDialog(ctx, params) {
             </label>
             <span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>
           </div>
+          <div class="form-group" style="margin-top: 12px; position: relative;">
+            <label for="skipInstances">Skip Instances</label>
+            <input type="text" id="skipInstances" placeholder="e.g. 1-4, 7, 9" value="${settings.skipInstances}">
+            <div class="validation-tooltip" id="skipInstances-error"></div>
+            <span class="checkbox-hint" style="margin-left: 0; margin-top: 4px;">Skip specific parts (ranges: 1-4, individual: 5, 7, or combined: 1-4, 7, 9)</span>
+          </div>
         </div>
       </form>
 
@@ -543,6 +582,10 @@ function showReplicatorDialog(ctx, params) {
           <div class="summary-row">
             <span class="summary-label">Total Replicas:</span>
             <span class="summary-value" id="totalParts">-</span>
+          </div>
+          <div class="summary-row" id="skippedRow" style="display: none;">
+            <span class="summary-label">Skipping:</span>
+            <span class="summary-value" id="generatingParts">-</span>
           </div>
           <div class="summary-row">
             <span class="summary-label">Grid Size:</span>
@@ -575,6 +618,79 @@ function showReplicatorDialog(ctx, params) {
         const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
         const convertToDisplay = (value) => isImperial ? value / INCH_TO_MM : value;
 
+        // Parse skip instances input (e.g., "1-4, 7, 9" returns Set {1,2,3,4,7,9})
+        function parseSkipInstances(input, maxParts) {
+          const skipSet = new Set();
+          if (!input || !input.trim()) return skipSet;
+
+          const parts = input.split(',').map(s => s.trim()).filter(s => s);
+          for (const part of parts) {
+            if (part.includes('-')) {
+              // Range: "1-4" or "3-7"
+              const [startStr, endStr] = part.split('-').map(s => s.trim());
+              const start = parseInt(startStr, 10);
+              const end = parseInt(endStr, 10);
+              if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+                for (let i = start; i <= Math.min(end, maxParts); i++) {
+                  skipSet.add(i);
+                }
+              }
+            } else {
+              // Single number: "7"
+              const num = parseInt(part, 10);
+              if (!isNaN(num) && num > 0 && num <= maxParts) {
+                skipSet.add(num);
+              }
+            }
+          }
+          return skipSet;
+        }
+
+        // Validate skip instances input and return error message or null
+        function validateSkipInstances(input, maxParts) {
+          if (!input || !input.trim()) return null;
+
+          const parts = input.split(',').map(s => s.trim()).filter(s => s);
+          for (const part of parts) {
+            if (part.includes('-')) {
+              const rangeParts = part.split('-');
+              if (rangeParts.length !== 2) {
+                return 'Invalid range format: ' + part;
+              }
+              const [startStr, endStr] = rangeParts.map(s => s.trim());
+              if (!startStr || !endStr) {
+                return 'Invalid range: ' + part;
+              }
+              const start = parseInt(startStr, 10);
+              const end = parseInt(endStr, 10);
+              if (isNaN(start) || isNaN(end)) {
+                return 'Invalid numbers in range: ' + part;
+              }
+              if (start < 1) {
+                return 'Range start must be >= 1: ' + part;
+              }
+              if (end < start) {
+                return 'Range end must be >= start: ' + part;
+              }
+              if (start > maxParts) {
+                return 'Range start exceeds total parts (' + maxParts + '): ' + part;
+              }
+            } else {
+              const num = parseInt(part, 10);
+              if (isNaN(num)) {
+                return 'Invalid number: ' + part;
+              }
+              if (num < 1) {
+                return 'Instance must be >= 1: ' + part;
+              }
+              if (num > maxParts) {
+                return 'Instance exceeds total parts (' + maxParts + '): ' + part;
+              }
+            }
+          }
+          return null;
+        }
+
         function getOutputFilename() {
           const rows = parseInt(document.getElementById('rows').value) || 1;
           const columns = parseInt(document.getElementById('columns').value) || 1;
@@ -587,16 +703,46 @@ function showReplicatorDialog(ctx, params) {
           const columns = parseInt(document.getElementById('columns').value) || 1;
           const gapX = parseFloat(document.getElementById('gapX').value) || 0;
           const gapY = parseFloat(document.getElementById('gapY').value) || 0;
+          const skipInput = document.getElementById('skipInstances').value || '';
 
           const gapXMm = convertToMetric(gapX);
           const gapYMm = convertToMetric(gapY);
 
           const totalParts = rows * columns;
+
+          // Validate skip instances
+          const skipError = validateSkipInstances(skipInput, totalParts);
+          const skipInputEl = document.getElementById('skipInstances');
+          const skipErrorEl = document.getElementById('skipInstances-error');
+          const skipFormGroup = skipInputEl.closest('.form-group');
+
+          if (skipError) {
+            skipInputEl.classList.add('input-error');
+            if (skipFormGroup) skipFormGroup.classList.add('has-error');
+            if (skipErrorEl) skipErrorEl.textContent = skipError;
+          } else {
+            skipInputEl.classList.remove('input-error');
+            if (skipFormGroup) skipFormGroup.classList.remove('has-error');
+            if (skipErrorEl) skipErrorEl.textContent = '';
+          }
+
+          const skipSet = skipError ? new Set() : parseSkipInstances(skipInput, totalParts);
+          const generatingCount = totalParts - skipSet.size;
+
           // Grid size = parts + gaps between them
           const gridWidthMm = columns * partWidth + (columns - 1) * gapXMm;
           const gridHeightMm = rows * partHeight + (rows - 1) * gapYMm;
 
-          document.getElementById('totalParts').textContent = totalParts;
+          // Show total and skip info
+          const skippedRow = document.getElementById('skippedRow');
+          if (skipSet.size > 0 && !skipError) {
+            document.getElementById('totalParts').textContent = generatingCount + ' of ' + totalParts;
+            skippedRow.style.display = '';
+            document.getElementById('generatingParts').textContent = Array.from(skipSet).sort((a,b) => a-b).join(', ');
+          } else {
+            document.getElementById('totalParts').textContent = totalParts;
+            skippedRow.style.display = 'none';
+          }
           document.getElementById('gridSize').textContent =
             convertToDisplay(gridWidthMm).toFixed(1) + ' x ' +
             convertToDisplay(gridHeightMm).toFixed(1) + ' ${distanceUnit}';
@@ -604,7 +750,10 @@ function showReplicatorDialog(ctx, params) {
           const validationMsg = document.getElementById('validationMessage');
           const generateBtn = document.getElementById('generateBtn');
 
-          if (gridWidthMm > machineLimitsX || gridHeightMm > machineLimitsY) {
+          if (skipError) {
+            validationMsg.classList.remove('show');
+            generateBtn.disabled = true;
+          } else if (gridWidthMm > machineLimitsX || gridHeightMm > machineLimitsY) {
             validationMsg.textContent = 'Grid size exceeds machine limits! ' +
               'Grid: ' + convertToDisplay(gridWidthMm).toFixed(1) + ' x ' + convertToDisplay(gridHeightMm).toFixed(1) + ' ${distanceUnit}, ' +
               'Machine: ' + convertToDisplay(machineLimitsX).toFixed(0) + ' x ' + convertToDisplay(machineLimitsY).toFixed(0) + ' ${distanceUnit}';
@@ -690,7 +839,8 @@ function showReplicatorDialog(ctx, params) {
               }
 
               const toolNum = m6Match ? (m6Match[1] || m6Match[2]) : tMatch[1];
-              currentSegment = { toolNum: parseInt(toolNum), lines: [line], isHeader: false };
+              // Don't include the M6 line in the segment - we'll add it once per unique tool
+              currentSegment = { toolNum: parseInt(toolNum), lines: [], isHeader: false };
             } else {
               currentSegment.lines.push(line);
             }
@@ -705,7 +855,7 @@ function showReplicatorDialog(ctx, params) {
         }
 
         function generateReplicatedGCode(originalGcode, options) {
-          const { rows, columns, rowDirection, columnDirection, spacingX, spacingY, gapX, gapY, sortByTool, originalFilename } = options;
+          const { rows, columns, rowDirection, columnDirection, spacingX, spacingY, gapX, gapY, sortByTool, skipInstances, originalFilename } = options;
 
           const xMultiplier = columnDirection === 'positive' ? 1 : -1;
           const yMultiplier = rowDirection === 'positive' ? 1 : -1;
@@ -713,20 +863,29 @@ function showReplicatorDialog(ctx, params) {
 
           const output = [];
 
+          // Parse skip instances
+          const skipSet = parseSkipInstances(skipInstances, totalParts);
+
           output.push('; Replicated G-code generated by Replicator Plugin');
           output.push('; Source: ' + originalFilename);
           output.push('; Grid: ' + columns + ' columns x ' + rows + ' rows = ' + totalParts + ' parts');
+          if (skipSet.size > 0) {
+            output.push('; Skipped instances: ' + Array.from(skipSet).sort((a,b) => a-b).join(', '));
+            output.push('; Generating: ' + (totalParts - skipSet.size) + ' parts');
+          }
           output.push('; Gap: X=' + gapX.toFixed(3) + 'mm, Y=' + gapY.toFixed(3) + 'mm');
           output.push('; X Direction: ' + columnDirection + ', Y Direction: ' + rowDirection);
           output.push('; Sort by Tool: ' + (sortByTool ? 'Yes' : 'No'));
           output.push('');
 
-          // Generate grid positions
+          // Generate grid positions (excluding skipped instances)
           const positions = [];
           for (let row = 0; row < rows; row++) {
             for (let col = 0; col < columns; col++) {
+              const partNum = row * columns + col + 1;
+              if (skipSet.has(partNum)) continue; // Skip this instance
               positions.push({
-                partNum: row * columns + col + 1,
+                partNum,
                 row: row + 1,
                 col: col + 1,
                 offsetX: col * spacingX * xMultiplier,
@@ -760,27 +919,46 @@ function showReplicatorDialog(ctx, params) {
                 output.push('');
               }
             } else {
-              // Sort by tool - each tool runs on all parts before next tool
+              // Group segments by tool number
+              const toolGroups = {};
+              const toolOrder = [];
+              for (const seg of toolSegments) {
+                if (!toolGroups[seg.toolNum]) {
+                  toolGroups[seg.toolNum] = [];
+                  toolOrder.push(seg.toolNum);
+                }
+                toolGroups[seg.toolNum].push(seg);
+              }
+
+              // Sort by tool - each unique tool runs on all parts before next tool
               output.push('; Tool order optimized to minimize tool changes');
-              output.push('; Tools found: ' + toolSegments.map(s => 'T' + s.toolNum).join(', '));
+              output.push('; Unique tools: ' + toolOrder.map(t => 'T' + t).join(', '));
+              output.push('; Total tool changes: ' + toolOrder.length + ' (reduced from ' + (toolSegments.length * totalParts) + ')');
               output.push('');
 
-              for (const toolSeg of toolSegments) {
-                output.push('; ========== Tool T' + toolSeg.toolNum + ' - All Parts ==========');
+              for (const toolNum of toolOrder) {
+                const segmentsForTool = toolGroups[toolNum];
+
+                output.push('; ========== Tool T' + toolNum + ' - All Parts ==========');
+                output.push('M6 T' + toolNum);
+                output.push('');
 
                 for (let posIndex = 0; posIndex < positions.length; posIndex++) {
                   const pos = positions[posIndex];
                   const isLastPosition = posIndex === positions.length - 1;
 
-                  output.push('; ----- T' + toolSeg.toolNum + ' Part ' + pos.partNum + ' (Row ' + pos.row + ', Col ' + pos.col + ') -----');
+                  output.push('; ----- T' + toolNum + ' Part ' + pos.partNum + ' (Row ' + pos.row + ', Col ' + pos.col + ') -----');
                   output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
-                  for (const line of toolSeg.lines) {
-                    // Skip M5 (spindle stop) for non-last positions - keep spindle running between parts
-                    if (!isLastPosition && isSpindleStopCommand(line)) {
-                      continue;
+                  // Run all segments for this tool on this position
+                  for (const seg of segmentsForTool) {
+                    for (const line of seg.lines) {
+                      // Skip M5 (spindle stop) for non-last positions - keep spindle running between parts
+                      if (!isLastPosition && isSpindleStopCommand(line)) {
+                        continue;
+                      }
+                      output.push(applyOffset(line, pos.offsetX, pos.offsetY));
                     }
-                    output.push(applyOffset(line, pos.offsetX, pos.offsetY));
                   }
                   output.push('');
                 }
@@ -823,13 +1001,41 @@ function showReplicatorDialog(ctx, params) {
         }
 
         // Add listeners for inputs
-        ['rows', 'columns', 'gapX', 'gapY'].forEach(id => {
+        ['rows', 'columns', 'gapX', 'gapY', 'skipInstances'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
             el.addEventListener('input', updatePreview);
             el.addEventListener('change', updatePreview);
           }
         });
+
+        // Clear skip instances when rows or columns change
+        ['rows', 'columns'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.addEventListener('change', () => {
+              document.getElementById('skipInstances').value = '';
+              updatePreview();
+            });
+          }
+        });
+
+        // Filter invalid characters from skip instances input (only allow 0-9, comma, dash, space)
+        const skipInstancesInput = document.getElementById('skipInstances');
+        if (skipInstancesInput) {
+          skipInstancesInput.addEventListener('keypress', (e) => {
+            const allowedChars = /[0-9,\\- ]/;
+            if (!allowedChars.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+              e.preventDefault();
+            }
+          });
+          skipInstancesInput.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const filteredText = pastedText.replace(/[^0-9,\\- ]/g, '');
+            document.execCommand('insertText', false, filteredText);
+          });
+        }
 
         // Initialize slider toggles
         const initSliderToggle = (toggleId) => {
@@ -877,6 +1083,7 @@ function showReplicatorDialog(ctx, params) {
           const gapX = parseFloat(document.getElementById('gapX').value);
           const gapY = parseFloat(document.getElementById('gapY').value);
           const sortByTool = document.getElementById('sortByTool').checked;
+          const skipInstances = document.getElementById('skipInstances').value.trim();
 
           const gapXMm = convertToMetric(gapX);
           const gapYMm = convertToMetric(gapY);
@@ -898,7 +1105,8 @@ function showReplicatorDialog(ctx, params) {
                 columnDirection,
                 gapX: gapXMm,
                 gapY: gapYMm,
-                sortByTool
+                sortByTool,
+                skipInstances
               }
             })
           }).catch(err => console.error('Failed to save settings:', err));
@@ -914,6 +1122,7 @@ function showReplicatorDialog(ctx, params) {
             gapX: gapXMm,
             gapY: gapYMm,
             sortByTool,
+            skipInstances,
             originalFilename
           });
 
