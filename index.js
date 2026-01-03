@@ -318,7 +318,7 @@ function showReplicatorDialog(ctx, params) {
       .summary-grid {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 16px;
         flex: 1;
         align-content: center;
       }
