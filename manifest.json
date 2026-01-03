@@ -1,7 +1,7 @@
 {
   "id": "com.ncsender.replicator",
   "name": "Replicator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "0.3.105",
   "author": "ncSender",
   "description": "Replicate loaded G-code program in a grid pattern",
