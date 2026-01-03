@@ -183,7 +183,8 @@ echo "========================================="
 echo ""
 
 # Commit the version change and release notes
-git add manifest.json "$RELEASE_NOTES_FILE"
+git add manifest.json
+git add -f "$RELEASE_NOTES_FILE"
 git commit -m "chore: create new release $NEW_TAG"
 
 # Push the commit
