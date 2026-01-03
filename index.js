@@ -3,6 +3,85 @@
  * Replicates loaded G-code program in a grid pattern
  */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+
+function getUserDataDir() {
+  const platform = os.platform();
+  const appName = 'ncSender';
+  switch (platform) {
+    case 'win32':
+      return path.join(os.homedir(), 'AppData', 'Roaming', appName);
+    case 'darwin':
+      return path.join(os.homedir(), 'Library', 'Application Support', appName);
+    case 'linux':
+      return path.join(os.homedir(), '.config', appName);
+    default:
+      return path.join(os.homedir(), `.${appName}`);
+  }
+}
+
+function analyzeGCodeBounds(gcodeContent) {
+  const bounds = {
+    min: { x: Infinity, y: Infinity, z: Infinity },
+    max: { x: -Infinity, y: -Infinity, z: -Infinity }
+  };
+
+  let currentX = 0, currentY = 0, currentZ = 0;
+  let isAbsolute = true;
+
+  const lines = gcodeContent.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim().toUpperCase();
+
+    if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed.startsWith('%')) {
+      continue;
+    }
+
+    if (trimmed.includes('G90')) isAbsolute = true;
+    if (trimmed.includes('G91')) isAbsolute = false;
+
+    if (trimmed.includes('G53')) continue;
+
+    const xMatch = trimmed.match(/X([+-]?\d*\.?\d+)/);
+    const yMatch = trimmed.match(/Y([+-]?\d*\.?\d+)/);
+    const zMatch = trimmed.match(/Z([+-]?\d*\.?\d+)/);
+
+    if (xMatch) {
+      const val = parseFloat(xMatch[1]);
+      currentX = isAbsolute ? val : currentX + val;
+    }
+    if (yMatch) {
+      const val = parseFloat(yMatch[1]);
+      currentY = isAbsolute ? val : currentY + val;
+    }
+    if (zMatch) {
+      const val = parseFloat(zMatch[1]);
+      currentZ = isAbsolute ? val : currentZ + val;
+    }
+
+    if (xMatch || yMatch || zMatch) {
+      bounds.min.x = Math.min(bounds.min.x, currentX);
+      bounds.min.y = Math.min(bounds.min.y, currentY);
+      bounds.min.z = Math.min(bounds.min.z, currentZ);
+      bounds.max.x = Math.max(bounds.max.x, currentX);
+      bounds.max.y = Math.max(bounds.max.y, currentY);
+      bounds.max.z = Math.max(bounds.max.z, currentZ);
+    }
+  }
+
+  if (bounds.min.x === Infinity) bounds.min.x = 0;
+  if (bounds.min.y === Infinity) bounds.min.y = 0;
+  if (bounds.min.z === Infinity) bounds.min.z = 0;
+  if (bounds.max.x === -Infinity) bounds.max.x = 0;
+  if (bounds.max.y === -Infinity) bounds.max.y = 0;
+  if (bounds.max.z === -Infinity) bounds.max.z = 0;
+
+  return bounds;
+}
+
 export async function onLoad(ctx) {
   ctx.log('Replicator plugin loaded');
 
@@ -10,51 +89,57 @@ export async function onLoad(ctx) {
     ctx.log('Replicator tool clicked');
 
     // Check if a G-code program is loaded
-    let serverState;
-    try {
-      const response = await fetch('/api/server-state');
-      serverState = await response.json();
-    } catch (error) {
-      ctx.log('Failed to get server state:', error);
-      showNoFileDialog(ctx);
-      return;
-    }
-
+    const serverState = ctx.getServerState();
     const jobLoaded = serverState?.jobLoaded;
-    const filename = jobLoaded?.filename;
+    let filename = jobLoaded?.filename;
 
     if (!filename) {
       showNoFileDialog(ctx);
       return;
     }
 
-    // Get the currently loaded G-code content
+    // Check if current file is a temporary/replicated file with a source
+    // If so, use the original source file instead
+    const sourceFile = jobLoaded?.sourceFile;
     let gcodeContent;
-    try {
-      const response = await fetch('/api/gcode-files/current/download');
-      if (!response.ok) {
-        throw new Error('Failed to download G-code');
+
+    if (sourceFile) {
+      // Load from original source file
+      ctx.log('Using original source file:', sourceFile);
+      filename = sourceFile;
+      try {
+        const sourceFilePath = path.join(getUserDataDir(), 'gcode-files', sourceFile);
+        gcodeContent = await fs.readFile(sourceFilePath, 'utf8');
+      } catch (error) {
+        ctx.log('Failed to read source file, falling back to cache:', error);
+        // Fall back to cache if source file not found
+        const cacheFilePath = path.join(getUserDataDir(), 'gcode-cache', 'current.gcode');
+        gcodeContent = await fs.readFile(cacheFilePath, 'utf8');
       }
-      gcodeContent = await response.text();
-    } catch (error) {
-      ctx.log('Failed to get G-code content:', error);
-      showNoFileDialog(ctx);
-      return;
+    } else {
+      // Load from cache (current file)
+      try {
+        const cacheFilePath = path.join(getUserDataDir(), 'gcode-cache', 'current.gcode');
+        gcodeContent = await fs.readFile(cacheFilePath, 'utf8');
+      } catch (error) {
+        ctx.log('Failed to read G-code content:', error);
+        showNoFileDialog(ctx);
+        return;
+      }
     }
 
     // Get machine limits from firmware settings
     let machineLimits = { x: 400, y: 400 };
     try {
-      const fwResponse = await fetch('/api/firmware/settings');
-      if (fwResponse.ok) {
-        const firmware = await fwResponse.json();
-        const xMax = parseFloat(firmware.settings?.['130']?.value);
-        const yMax = parseFloat(firmware.settings?.['131']?.value);
-        if (!isNaN(xMax) && xMax > 0) machineLimits.x = xMax;
-        if (!isNaN(yMax) && yMax > 0) machineLimits.y = yMax;
-      }
+      const firmwareFilePath = path.join(getUserDataDir(), 'firmware.json');
+      const firmwareText = await fs.readFile(firmwareFilePath, 'utf8');
+      const firmware = JSON.parse(firmwareText);
+      const xMax = parseFloat(firmware.settings?.['130']?.value);
+      const yMax = parseFloat(firmware.settings?.['131']?.value);
+      if (!isNaN(xMax) && xMax > 0) machineLimits.x = xMax;
+      if (!isNaN(yMax) && yMax > 0) machineLimits.y = yMax;
     } catch (error) {
-      ctx.log('Failed to get firmware settings, using defaults:', error);
+      ctx.log('Failed to read firmware settings, using defaults:', error);
     }
 
     // Analyze G-code to get bounding box
@@ -69,15 +154,11 @@ export async function onLoad(ctx) {
 
     // Conversion factors
     const MM_TO_INCH = 0.0393701;
-    const INCH_TO_MM = 25.4;
     const convertToDisplay = (value) => isImperial ? parseFloat((value * MM_TO_INCH).toFixed(3)) : value;
-    const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
 
     // Calculate default spacing based on bounds
     const partWidth = bounds.max.x - bounds.min.x;
     const partHeight = bounds.max.y - bounds.min.y;
-    const defaultSpacingX = convertToDisplay(Math.ceil(partWidth + 5));
-    const defaultSpacingY = convertToDisplay(Math.ceil(partHeight + 5));
 
     // Get saved settings
     const savedSettings = ctx.getSettings()?.replicator || {};
@@ -87,8 +168,9 @@ export async function onLoad(ctx) {
       rowDirection: savedSettings.rowDirection ?? 'positive',
       columns: savedSettings.columns ?? 2,
       columnDirection: savedSettings.columnDirection ?? 'positive',
-      spacingX: convertToDisplay(savedSettings.spacingX ?? (partWidth + 5)),
-      spacingY: convertToDisplay(savedSettings.spacingY ?? (partHeight + 5))
+      gapX: convertToDisplay(savedSettings.gapX ?? 5),
+      gapY: convertToDisplay(savedSettings.gapY ?? 5),
+      sortByTool: savedSettings.sortByTool ?? false
     };
 
     showReplicatorDialog(ctx, {
@@ -100,7 +182,6 @@ export async function onLoad(ctx) {
       isImperial,
       distanceUnit,
       convertToDisplay,
-      convertToMetric,
       partWidth,
       partHeight
     });
@@ -164,10 +245,12 @@ function showReplicatorDialog(ctx, params) {
     isImperial,
     distanceUnit,
     convertToDisplay,
-    convertToMetric,
     partWidth,
     partHeight
   } = params;
+
+  // Escape the G-code content for embedding in JavaScript
+  const escapedGcode = JSON.stringify(gcodeContent);
 
   ctx.showDialog(
     'Replicator',
@@ -204,21 +287,31 @@ function showReplicatorDialog(ctx, params) {
         border-bottom: 1px solid var(--color-border);
         text-align: center;
       }
-      .info-card {
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-small);
-        padding: 12px;
-        margin-bottom: 16px;
-        font-size: 0.85rem;
+      .form-section-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        margin: 16px 0 12px 0;
+        padding-top: 12px;
+        border-top: 1px solid var(--color-border);
+        text-align: center;
       }
-      .info-row {
+      .summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 16px;
+      }
+      .summary-row {
         display: flex;
-        justify-content: space-between;
-        padding: 4px 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .summary-label {
+        font-size: 0.75rem;
         color: var(--color-text-secondary);
       }
-      .info-value {
+      .summary-value {
+        font-size: 0.85rem;
         font-weight: 600;
         color: var(--color-accent);
       }
@@ -267,26 +360,6 @@ function showReplicatorDialog(ctx, params) {
       .validation-message.show {
         display: block;
       }
-      .preview-info {
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-small);
-        padding: 12px;
-        margin-top: 16px;
-        font-size: 0.85rem;
-      }
-      .preview-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 4px 0;
-      }
-      .preview-label {
-        color: var(--color-text-secondary);
-      }
-      .preview-value {
-        font-weight: 600;
-        color: var(--color-accent);
-      }
       .button-group {
         display: flex;
         gap: 10px;
@@ -315,28 +388,40 @@ function showReplicatorDialog(ctx, params) {
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .checkbox-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        text-align: left;
+      }
+      .checkbox-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--color-accent);
+      }
+      .checkbox-text {
+        font-weight: 500;
+        color: var(--color-text-primary);
+      }
+      .checkbox-hint {
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+        margin-left: 26px;
+      }
     </style>
 
     <div class="replicator-layout">
       <div class="form-column">
-        <div class="info-card">
-          <div class="info-row">
-            <span>Source File:</span>
-            <span class="info-value">${filename}</span>
-          </div>
-          <div class="info-row">
-            <span>Part Size:</span>
-            <span class="info-value">${convertToDisplay(partWidth).toFixed(1)} x ${convertToDisplay(partHeight).toFixed(1)} ${distanceUnit}</span>
-          </div>
-          <div class="info-row">
-            <span>Machine Limits:</span>
-            <span class="info-value">${convertToDisplay(machineLimits.x).toFixed(0)} x ${convertToDisplay(machineLimits.y).toFixed(0)} ${distanceUnit}</span>
-          </div>
-        </div>
-
         <form id="replicatorForm" novalidate>
           <div class="form-card">
-            <div class="form-card-title">Grid Configuration</div>
+            <div class="form-card-title">Configuration</div>
             <div class="form-row">
               <div class="form-group">
                 <label for="columns">Columns (X)</label>
@@ -363,34 +448,48 @@ function showReplicatorDialog(ctx, params) {
                 </select>
               </div>
             </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="gapX">X Gap (${distanceUnit})</label>
+                <input type="number" id="gapX" min="0" step="0.1" value="${settings.gapX}" required>
+              </div>
+              <div class="form-group">
+                <label for="gapY">Y Gap (${distanceUnit})</label>
+                <input type="number" id="gapY" min="0" step="0.1" value="${settings.gapY}" required>
+              </div>
+            </div>
+            <div class="checkbox-row" style="margin-top: 8px;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="sortByTool" ${settings.sortByTool ? 'checked' : ''}>
+                <span class="checkbox-text">Sort by Tool</span>
+              </label>
+              <span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>
+            </div>
           </div>
 
           <div class="form-card">
-            <div class="form-card-title">Spacing (center to center)</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="spacingX">X Spacing (${distanceUnit})</label>
-                <input type="number" id="spacingX" min="0.1" step="0.1" value="${settings.spacingX}" required>
+            <div class="form-card-title">Summary</div>
+            <div class="summary-grid">
+              <div class="summary-row">
+                <span class="summary-label">Source File:</span>
+                <span class="summary-value">${filename}</span>
               </div>
-              <div class="form-group">
-                <label for="spacingY">Y Spacing (${distanceUnit})</label>
-                <input type="number" id="spacingY" min="0.1" step="0.1" value="${settings.spacingY}" required>
+              <div class="summary-row">
+                <span class="summary-label">Part Size:</span>
+                <span class="summary-value">${convertToDisplay(partWidth).toFixed(1)} x ${convertToDisplay(partHeight).toFixed(1)} ${distanceUnit}</span>
               </div>
-            </div>
-          </div>
-
-          <div class="preview-info" id="previewInfo">
-            <div class="preview-row">
-              <span class="preview-label">Total Parts:</span>
-              <span class="preview-value" id="totalParts">-</span>
-            </div>
-            <div class="preview-row">
-              <span class="preview-label">Grid Size:</span>
-              <span class="preview-value" id="gridSize">-</span>
-            </div>
-            <div class="preview-row">
-              <span class="preview-label">Output File:</span>
-              <span class="preview-value" id="outputFile">-</span>
+              <div class="summary-row">
+                <span class="summary-label">Machine Limits:</span>
+                <span class="summary-value">${convertToDisplay(machineLimits.x).toFixed(0)} x ${convertToDisplay(machineLimits.y).toFixed(0)} ${distanceUnit}</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Total Replicas:</span>
+                <span class="summary-value" id="totalParts">-</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Grid Size:</span>
+                <span class="summary-value" id="gridSize">-</span>
+              </div>
             </div>
           </div>
 
@@ -415,6 +514,7 @@ function showReplicatorDialog(ctx, params) {
         const machineLimitsX = ${machineLimits.x};
         const machineLimitsY = ${machineLimits.y};
         const originalFilename = '${filename.replace(/'/g, "\\'")}';
+        const originalGcode = ${escapedGcode};
 
         const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
         const convertToDisplay = (value) => isImperial ? value / INCH_TO_MM : value;
@@ -429,23 +529,22 @@ function showReplicatorDialog(ctx, params) {
         function updatePreview() {
           const rows = parseInt(document.getElementById('rows').value) || 1;
           const columns = parseInt(document.getElementById('columns').value) || 1;
-          const spacingX = parseFloat(document.getElementById('spacingX').value) || 0;
-          const spacingY = parseFloat(document.getElementById('spacingY').value) || 0;
+          const gapX = parseFloat(document.getElementById('gapX').value) || 0;
+          const gapY = parseFloat(document.getElementById('gapY').value) || 0;
 
-          const spacingXMm = convertToMetric(spacingX);
-          const spacingYMm = convertToMetric(spacingY);
+          const gapXMm = convertToMetric(gapX);
+          const gapYMm = convertToMetric(gapY);
 
           const totalParts = rows * columns;
-          const gridWidthMm = partWidth + (columns - 1) * spacingXMm;
-          const gridHeightMm = partHeight + (rows - 1) * spacingYMm;
+          // Grid size = parts + gaps between them
+          const gridWidthMm = columns * partWidth + (columns - 1) * gapXMm;
+          const gridHeightMm = rows * partHeight + (rows - 1) * gapYMm;
 
           document.getElementById('totalParts').textContent = totalParts;
           document.getElementById('gridSize').textContent =
             convertToDisplay(gridWidthMm).toFixed(1) + ' x ' +
             convertToDisplay(gridHeightMm).toFixed(1) + ' ${distanceUnit}';
-          document.getElementById('outputFile').textContent = getOutputFilename();
 
-          // Validate against machine limits
           const validationMsg = document.getElementById('validationMessage');
           const generateBtn = document.getElementById('generateBtn');
 
@@ -455,8 +554,8 @@ function showReplicatorDialog(ctx, params) {
               'Machine: ' + convertToDisplay(machineLimitsX).toFixed(0) + ' x ' + convertToDisplay(machineLimitsY).toFixed(0) + ' ${distanceUnit}';
             validationMsg.classList.add('show');
             generateBtn.disabled = true;
-          } else if (spacingXMm < partWidth || spacingYMm < partHeight) {
-            validationMsg.textContent = 'Warning: Spacing is less than part size. Parts may overlap.';
+          } else if (gapXMm < 0 || gapYMm < 0) {
+            validationMsg.textContent = 'Warning: Negative gap will cause parts to overlap.';
             validationMsg.classList.add('show');
             generateBtn.disabled = false;
           } else {
@@ -465,8 +564,186 @@ function showReplicatorDialog(ctx, params) {
           }
         }
 
+        // G-code generation functions (browser-side)
+        function applyOffset(line, offsetX, offsetY) {
+          const trimmed = line.trim().toUpperCase();
+
+          if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed === '' || trimmed.includes('G53')) {
+            return line;
+          }
+
+          if (!trimmed.includes('X') && !trimmed.includes('Y')) {
+            return line;
+          }
+
+          if (trimmed.includes('G91')) {
+            return line;
+          }
+
+          let result = line;
+
+          result = result.replace(/X([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
+            const newValue = parseFloat(value) + offsetX;
+            return 'X' + newValue.toFixed(3);
+          });
+
+          result = result.replace(/Y([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
+            const newValue = parseFloat(value) + offsetY;
+            return 'Y' + newValue.toFixed(3);
+          });
+
+          return result;
+        }
+
+        function parseToolSegments(gcode) {
+          const lines = gcode.split('\\n');
+          const segments = [];
+          let currentSegment = { toolNum: null, lines: [], isHeader: true };
+
+          for (const line of lines) {
+            const trimmed = line.trim().toUpperCase();
+
+            // Skip program end
+            if (trimmed === 'M30' || trimmed === 'M2') continue;
+
+            // Detect tool change (M6 with T number, or standalone T command)
+            const m6Match = trimmed.match(/M6\\s*T(\\d+)|T(\\d+)\\s*M6/i);
+            const tMatch = trimmed.match(/^T(\\d+)$/i);
+
+            if (m6Match || tMatch) {
+              // Save current segment if it has content
+              if (currentSegment.lines.length > 0) {
+                segments.push(currentSegment);
+              }
+
+              const toolNum = m6Match ? (m6Match[1] || m6Match[2]) : tMatch[1];
+              currentSegment = { toolNum: parseInt(toolNum), lines: [line], isHeader: false };
+            } else {
+              currentSegment.lines.push(line);
+            }
+          }
+
+          // Don't forget the last segment
+          if (currentSegment.lines.length > 0) {
+            segments.push(currentSegment);
+          }
+
+          return segments;
+        }
+
+        function generateReplicatedGCode(originalGcode, options) {
+          const { rows, columns, rowDirection, columnDirection, spacingX, spacingY, gapX, gapY, sortByTool, originalFilename } = options;
+
+          const xMultiplier = columnDirection === 'positive' ? 1 : -1;
+          const yMultiplier = rowDirection === 'positive' ? 1 : -1;
+          const totalParts = rows * columns;
+
+          const output = [];
+
+          output.push('; Replicated G-code generated by Replicator Plugin');
+          output.push('; Source: ' + originalFilename);
+          output.push('; Grid: ' + columns + ' columns x ' + rows + ' rows = ' + totalParts + ' parts');
+          output.push('; Gap: X=' + gapX.toFixed(3) + 'mm, Y=' + gapY.toFixed(3) + 'mm');
+          output.push('; X Direction: ' + columnDirection + ', Y Direction: ' + rowDirection);
+          output.push('; Sort by Tool: ' + (sortByTool ? 'Yes' : 'No'));
+          output.push('');
+
+          // Generate grid positions
+          const positions = [];
+          for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < columns; col++) {
+              positions.push({
+                partNum: row * columns + col + 1,
+                row: row + 1,
+                col: col + 1,
+                offsetX: col * spacingX * xMultiplier,
+                offsetY: row * spacingY * yMultiplier
+              });
+            }
+          }
+
+          if (sortByTool) {
+            // Parse G-code into tool segments
+            const segments = parseToolSegments(originalGcode);
+
+            // Separate header (before first tool) from tool operations
+            const headerSegment = segments.find(s => s.isHeader);
+            const toolSegments = segments.filter(s => !s.isHeader);
+
+            if (toolSegments.length === 0) {
+              // No tool changes found, fall back to normal replication
+              output.push('; No tool changes detected, using standard replication');
+              output.push('');
+
+              for (const pos of positions) {
+                output.push('; ===== Part ' + pos.partNum + ' of ' + totalParts + ' (Row ' + pos.row + ', Col ' + pos.col + ') =====');
+                output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
+
+                for (const line of (headerSegment ? headerSegment.lines : originalGcode.split('\\n'))) {
+                  const trimmed = line.trim().toUpperCase();
+                  if (trimmed === 'M30' || trimmed === 'M2') continue;
+                  output.push(applyOffset(line, pos.offsetX, pos.offsetY));
+                }
+                output.push('');
+              }
+            } else {
+              // Sort by tool - each tool runs on all parts before next tool
+              output.push('; Tool order optimized to minimize tool changes');
+              output.push('; Tools found: ' + toolSegments.map(s => 'T' + s.toolNum).join(', '));
+              output.push('');
+
+              for (const toolSeg of toolSegments) {
+                output.push('; ========== Tool T' + toolSeg.toolNum + ' - All Parts ==========');
+
+                for (const pos of positions) {
+                  output.push('; ----- T' + toolSeg.toolNum + ' Part ' + pos.partNum + ' (Row ' + pos.row + ', Col ' + pos.col + ') -----');
+                  output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
+
+                  for (const line of toolSeg.lines) {
+                    output.push(applyOffset(line, pos.offsetX, pos.offsetY));
+                  }
+                  output.push('');
+                }
+              }
+            }
+          } else {
+            // Standard replication - each part runs all tools
+            const originalLines = originalGcode.split('\\n');
+            const cleanedLines = [];
+            let foundFirstMove = false;
+
+            for (const line of originalLines) {
+              const trimmed = line.trim().toUpperCase();
+
+              if (!foundFirstMove && trimmed === '') continue;
+              if (trimmed === 'M30' || trimmed === 'M2') continue;
+
+              if (!foundFirstMove && (trimmed.startsWith('G') || trimmed.startsWith('M') || trimmed.startsWith('S') || trimmed.startsWith('F'))) {
+                foundFirstMove = true;
+              }
+
+              cleanedLines.push(line);
+            }
+
+            for (const pos of positions) {
+              output.push('; ===== Part ' + pos.partNum + ' of ' + totalParts + ' (Row ' + pos.row + ', Col ' + pos.col + ') =====');
+              output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
+
+              for (const line of cleanedLines) {
+                output.push(applyOffset(line, pos.offsetX, pos.offsetY));
+              }
+
+              output.push('');
+            }
+          }
+
+          output.push('M30 ; Program end');
+
+          return output.join('\\n');
+        }
+
         // Add listeners
-        ['rows', 'columns', 'spacingX', 'spacingY', 'rowDirection', 'columnDirection'].forEach(id => {
+        ['rows', 'columns', 'gapX', 'gapY', 'rowDirection', 'columnDirection'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
             el.addEventListener('input', updatePreview);
@@ -485,271 +762,79 @@ function showReplicatorDialog(ctx, params) {
           const columns = parseInt(document.getElementById('columns').value);
           const rowDirection = document.getElementById('rowDirection').value;
           const columnDirection = document.getElementById('columnDirection').value;
-          const spacingX = parseFloat(document.getElementById('spacingX').value);
-          const spacingY = parseFloat(document.getElementById('spacingY').value);
+          const gapX = parseFloat(document.getElementById('gapX').value);
+          const gapY = parseFloat(document.getElementById('gapY').value);
+          const sortByTool = document.getElementById('sortByTool').checked;
 
-          const spacingXMm = convertToMetric(spacingX);
-          const spacingYMm = convertToMetric(spacingY);
+          const gapXMm = convertToMetric(gapX);
+          const gapYMm = convertToMetric(gapY);
+          const outputFilename = getOutputFilename();
+
+          // Calculate spacing (center to center) from gap + part size
+          const spacingXMm = partWidth + gapXMm;
+          const spacingYMm = partHeight + gapYMm;
 
           // Save settings
-          const settingsToSave = {
-            replicator: {
-              rows,
-              columns,
-              rowDirection,
-              columnDirection,
-              spacingX: spacingXMm,
-              spacingY: spacingYMm
-            }
-          };
-
-          await fetch('/api/plugins/com.ncsender.replicator/settings', {
+          fetch('/api/plugins/com.ncsender.replicator/settings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settingsToSave)
-          });
-
-          // Post message to generate G-code
-          window.postMessage({
-            type: 'replicator-generate',
-            data: {
-              rows,
-              columns,
-              rowDirection,
-              columnDirection,
-              spacingXMm,
-              spacingYMm,
-              outputFilename: getOutputFilename()
-            }
-          }, '*');
-        });
-
-        // Listen for generate response
-        window.addEventListener('message', (event) => {
-          if (event.data?.type === 'replicator-done') {
-            window.postMessage({type: 'close-plugin-dialog'}, '*');
-          }
-        });
-      })();
-    </script>
-    `,
-    {
-      closable: true,
-      width: '600px',
-      onMessage: async (message) => {
-        if (message.type === 'replicator-generate') {
-          const { rows, columns, rowDirection, columnDirection, spacingXMm, spacingYMm, outputFilename } = message.data;
-
-          ctx.log('Generating replicated G-code:', message.data);
+            body: JSON.stringify({
+              replicator: {
+                rows,
+                columns,
+                rowDirection,
+                columnDirection,
+                gapX: gapXMm,
+                gapY: gapYMm,
+                sortByTool
+              }
+            })
+          }).catch(err => console.error('Failed to save settings:', err));
 
           // Generate the replicated G-code
-          const replicatedGcode = generateReplicatedGCode(gcodeContent, {
+          const replicatedGcode = generateReplicatedGCode(originalGcode, {
             rows,
             columns,
             rowDirection,
             columnDirection,
             spacingX: spacingXMm,
             spacingY: spacingYMm,
-            originalFilename: filename
+            gapX: gapXMm,
+            gapY: gapYMm,
+            sortByTool,
+            originalFilename
           });
 
-          // Upload the generated G-code
+          // Load the generated G-code temporarily (cache only, no file save)
           try {
-            const formData = new FormData();
-            const blob = new Blob([replicatedGcode], { type: 'text/plain' });
-            formData.append('file', blob, outputFilename);
-
-            const response = await fetch('/api/gcode-files', {
+            const response = await fetch('/api/gcode-files/load-temp', {
               method: 'POST',
-              body: formData
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: replicatedGcode,
+                filename: outputFilename,
+                sourceFile: originalFilename  // Track original so we can re-replicate
+              })
             });
 
             if (response.ok) {
-              ctx.log('Replicated G-code generated and loaded:', outputFilename);
-              ctx.broadcast('replicator-done', {});
+              console.log('Replicated G-code generated and loaded:', outputFilename);
+              setTimeout(() => {
+                window.postMessage({ type: 'close-plugin-dialog' }, '*');
+              }, 100);
             } else {
-              ctx.log('Failed to load replicated G-code');
+              alert('Failed to load G-code');
             }
           } catch (error) {
-            ctx.log('Error uploading replicated G-code:', error);
+            console.error('Error loading replicated G-code:', error);
+            alert('Error loading G-code');
           }
-        }
-      }
-    }
+        });
+      })();
+    </script>
+    `,
+    { closable: true, width: '600px' }
   );
-}
-
-function analyzeGCodeBounds(gcodeContent) {
-  const bounds = {
-    min: { x: Infinity, y: Infinity, z: Infinity },
-    max: { x: -Infinity, y: -Infinity, z: -Infinity }
-  };
-
-  let currentX = 0, currentY = 0, currentZ = 0;
-  let isAbsolute = true;
-
-  const lines = gcodeContent.split('\n');
-
-  for (const line of lines) {
-    const trimmed = line.trim().toUpperCase();
-
-    // Skip comments
-    if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed.startsWith('%')) {
-      continue;
-    }
-
-    // Check for absolute/incremental mode
-    if (trimmed.includes('G90')) isAbsolute = true;
-    if (trimmed.includes('G91')) isAbsolute = false;
-
-    // Skip machine coordinate moves (G53)
-    if (trimmed.includes('G53')) continue;
-
-    // Parse coordinates
-    const xMatch = trimmed.match(/X([+-]?\d*\.?\d+)/);
-    const yMatch = trimmed.match(/Y([+-]?\d*\.?\d+)/);
-    const zMatch = trimmed.match(/Z([+-]?\d*\.?\d+)/);
-
-    if (xMatch) {
-      const val = parseFloat(xMatch[1]);
-      currentX = isAbsolute ? val : currentX + val;
-    }
-    if (yMatch) {
-      const val = parseFloat(yMatch[1]);
-      currentY = isAbsolute ? val : currentY + val;
-    }
-    if (zMatch) {
-      const val = parseFloat(zMatch[1]);
-      currentZ = isAbsolute ? val : currentZ + val;
-    }
-
-    // Update bounds (only if we found coordinates)
-    if (xMatch || yMatch || zMatch) {
-      bounds.min.x = Math.min(bounds.min.x, currentX);
-      bounds.min.y = Math.min(bounds.min.y, currentY);
-      bounds.min.z = Math.min(bounds.min.z, currentZ);
-      bounds.max.x = Math.max(bounds.max.x, currentX);
-      bounds.max.y = Math.max(bounds.max.y, currentY);
-      bounds.max.z = Math.max(bounds.max.z, currentZ);
-    }
-  }
-
-  // Handle case where no coordinates were found
-  if (bounds.min.x === Infinity) bounds.min.x = 0;
-  if (bounds.min.y === Infinity) bounds.min.y = 0;
-  if (bounds.min.z === Infinity) bounds.min.z = 0;
-  if (bounds.max.x === -Infinity) bounds.max.x = 0;
-  if (bounds.max.y === -Infinity) bounds.max.y = 0;
-  if (bounds.max.z === -Infinity) bounds.max.z = 0;
-
-  return bounds;
-}
-
-function generateReplicatedGCode(originalGcode, options) {
-  const {
-    rows,
-    columns,
-    rowDirection,
-    columnDirection,
-    spacingX,
-    spacingY,
-    originalFilename
-  } = options;
-
-  const xMultiplier = columnDirection === 'positive' ? 1 : -1;
-  const yMultiplier = rowDirection === 'positive' ? 1 : -1;
-
-  const output = [];
-
-  // Header
-  output.push(`; Replicated G-code generated by Replicator Plugin`);
-  output.push(`; Source: ${originalFilename}`);
-  output.push(`; Grid: ${columns} columns x ${rows} rows = ${rows * columns} parts`);
-  output.push(`; Spacing: X=${spacingX.toFixed(3)}mm, Y=${spacingY.toFixed(3)}mm`);
-  output.push(`; X Direction: ${columnDirection}, Y Direction: ${rowDirection}`);
-  output.push('');
-
-  // Remove header comments and program end from original
-  const originalLines = originalGcode.split('\n');
-  const cleanedLines = [];
-  let foundFirstMove = false;
-
-  for (const line of originalLines) {
-    const trimmed = line.trim().toUpperCase();
-
-    // Skip empty lines at the start
-    if (!foundFirstMove && trimmed === '') continue;
-
-    // Skip M30/M2 program end
-    if (trimmed === 'M30' || trimmed === 'M2') continue;
-
-    // Mark when we find first real content
-    if (!foundFirstMove && (trimmed.startsWith('G') || trimmed.startsWith('M') || trimmed.startsWith('S') || trimmed.startsWith('F'))) {
-      foundFirstMove = true;
-    }
-
-    cleanedLines.push(line);
-  }
-
-  // Generate grid
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < columns; col++) {
-      const partNum = row * columns + col + 1;
-      const offsetX = col * spacingX * xMultiplier;
-      const offsetY = row * spacingY * yMultiplier;
-
-      output.push(`; ===== Part ${partNum} of ${rows * columns} (Row ${row + 1}, Col ${col + 1}) =====`);
-      output.push(`; Offset: X=${offsetX.toFixed(3)}, Y=${offsetY.toFixed(3)}`);
-
-      // Apply offset to each line
-      for (const line of cleanedLines) {
-        const offsetLine = applyOffset(line, offsetX, offsetY);
-        output.push(offsetLine);
-      }
-
-      output.push('');
-    }
-  }
-
-  // Footer
-  output.push('M30 ; Program end');
-
-  return output.join('\n');
-}
-
-function applyOffset(line, offsetX, offsetY) {
-  const trimmed = line.trim().toUpperCase();
-
-  // Skip comments, empty lines, and machine coordinate moves
-  if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed === '' || trimmed.includes('G53')) {
-    return line;
-  }
-
-  // Skip lines without X or Y coordinates
-  if (!trimmed.includes('X') && !trimmed.includes('Y')) {
-    return line;
-  }
-
-  // Skip incremental mode moves (would need different handling)
-  if (trimmed.includes('G91')) {
-    return line;
-  }
-
-  let result = line;
-
-  // Apply X offset
-  result = result.replace(/X([+-]?\d*\.?\d+)/gi, (match, value) => {
-    const newValue = parseFloat(value) + offsetX;
-    return 'X' + newValue.toFixed(3);
-  });
-
-  // Apply Y offset
-  result = result.replace(/Y([+-]?\d*\.?\d+)/gi, (match, value) => {
-    const newValue = parseFloat(value) + offsetY;
-    return 'Y' + newValue.toFixed(3);
-  });
-
-  return result;
 }
 
 export async function onUnload(ctx) {
