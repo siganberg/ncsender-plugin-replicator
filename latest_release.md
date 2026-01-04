@@ -1,4 +1,5 @@
 ## What's Changed
 
 ### Bug Fixes
-- Fixed boundary calculation issue on the Y axis
+- Fixed various bugs affecting plugin functionality
+- Eliminated redundant G-code output for cleaner, more efficient machine code generation
