@@ -1017,19 +1017,73 @@ function showReplicatorDialog(ctx, params) {
 
             if (toolSegments.length === 0) {
               // No tool changes found, fall back to normal replication
+              // Separate preamble (setup), cutting operations, and postamble (teardown)
               output.push('; No tool changes detected, using standard replication');
               output.push('');
 
-              for (const pos of positions) {
+              const sourceLines = headerSegment ? headerSegment.lines : originalGcode.split('\\n');
+              const preamble = [];
+              const cutting = [];
+              const postamble = [];
+
+              let phase = 'preamble';
+
+              for (const line of sourceLines) {
+                const trimmed = line.trim().toUpperCase();
+
+                if (trimmed === 'M30' || trimmed === 'M2') continue;
+
+                if (phase === 'preamble') {
+                  const isSpindleStart = /\\bM0*[34]\\b/.test(trimmed);
+                  const hasXY = /[XY][+-]?\\d/.test(trimmed) && !/G53/.test(trimmed);
+                  if (isSpindleStart || hasXY) {
+                    phase = 'cutting';
+                  }
+                }
+
+                if (phase === 'cutting') {
+                  const isG53 = /G53/.test(trimmed);
+                  const isSpindleStop = isSpindleStopCommand(line);
+                  if (isG53 || isSpindleStop) {
+                    phase = 'postamble';
+                  }
+                }
+
+                if (phase === 'preamble') {
+                  preamble.push(line);
+                } else if (phase === 'cutting') {
+                  cutting.push(line);
+                } else {
+                  postamble.push(line);
+                }
+              }
+
+              // Output preamble once
+              for (const line of preamble) {
+                output.push(line);
+              }
+              output.push('');
+
+              // Output cutting for each position
+              for (let posIndex = 0; posIndex < positions.length; posIndex++) {
+                const pos = positions[posIndex];
+                const isLastPosition = posIndex === positions.length - 1;
+
                 output.push('; ===== Part ' + pos.partNum + ' of ' + totalParts + ' (Row ' + pos.row + ', Col ' + pos.col + ') =====');
                 output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
-                for (const line of (headerSegment ? headerSegment.lines : originalGcode.split('\\n'))) {
-                  const trimmed = line.trim().toUpperCase();
-                  if (trimmed === 'M30' || trimmed === 'M2') continue;
+                for (const line of cutting) {
+                  if (!isLastPosition && isSpindleStopCommand(line)) {
+                    continue;
+                  }
                   output.push(applyOffset(line, pos.offsetX, pos.offsetY));
                 }
                 output.push('');
+              }
+
+              // Output postamble once
+              for (const line of postamble) {
+                output.push(line);
               }
             } else {
               // Group segments by tool number
@@ -1079,32 +1133,79 @@ function showReplicatorDialog(ctx, params) {
             }
           } else {
             // Standard replication - each part runs all tools
+            // Separate preamble (setup), cutting operations, and postamble (teardown)
             const originalLines = originalGcode.split('\\n');
-            const cleanedLines = [];
-            let foundFirstMove = false;
+            const preamble = [];
+            const cutting = [];
+            const postamble = [];
+
+            let phase = 'preamble'; // preamble -> cutting -> postamble
 
             for (const line of originalLines) {
               const trimmed = line.trim().toUpperCase();
 
-              if (!foundFirstMove && trimmed === '') continue;
+              // Skip program end commands entirely (we add one at the end)
               if (trimmed === 'M30' || trimmed === 'M2') continue;
 
-              if (!foundFirstMove && (trimmed.startsWith('G') || trimmed.startsWith('M') || trimmed.startsWith('S') || trimmed.startsWith('F'))) {
-                foundFirstMove = true;
+              // Detect transition from preamble to cutting
+              // Cutting starts with first spindle start (M3/M4) or first move with X/Y
+              if (phase === 'preamble') {
+                const isSpindleStart = /\\bM0*[34]\\b/.test(trimmed);
+                const hasXY = /[XY][+-]?\\d/.test(trimmed) && !/G53/.test(trimmed);
+
+                if (isSpindleStart || hasXY) {
+                  phase = 'cutting';
+                }
               }
 
-              cleanedLines.push(line);
+              // Detect transition from cutting to postamble
+              // Postamble starts with G53 moves or M5 after cutting has started
+              if (phase === 'cutting') {
+                const isG53 = /G53/.test(trimmed);
+                const isSpindleStop = isSpindleStopCommand(line);
+
+                if (isG53 || isSpindleStop) {
+                  phase = 'postamble';
+                }
+              }
+
+              // Add line to appropriate section
+              if (phase === 'preamble') {
+                preamble.push(line);
+              } else if (phase === 'cutting') {
+                cutting.push(line);
+              } else {
+                postamble.push(line);
+              }
             }
 
-            for (const pos of positions) {
+            // Output preamble once at the start
+            for (const line of preamble) {
+              output.push(line);
+            }
+            output.push('');
+
+            // Output cutting operations for each position
+            for (let posIndex = 0; posIndex < positions.length; posIndex++) {
+              const pos = positions[posIndex];
+              const isLastPosition = posIndex === positions.length - 1;
+
               output.push('; ===== Part ' + pos.partNum + ' of ' + totalParts + ' (Row ' + pos.row + ', Col ' + pos.col + ') =====');
               output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
-              for (const line of cleanedLines) {
+              for (const line of cutting) {
+                // Skip M5 (spindle stop) for non-last positions
+                if (!isLastPosition && isSpindleStopCommand(line)) {
+                  continue;
+                }
                 output.push(applyOffset(line, pos.offsetX, pos.offsetY));
               }
-
               output.push('');
+            }
+
+            // Output postamble once at the end
+            for (const line of postamble) {
+              output.push(line);
             }
           }
 
