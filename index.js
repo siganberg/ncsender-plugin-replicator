@@ -47,6 +47,7 @@ function analyzeGCodeBounds(gcodeContent) {
 
   let currentX = 0, currentY = 0, currentZ = 0;
   let isAbsolute = true;
+  let isArcAbsolute = false; // G90.1/G91.1 for arc center mode
 
   const lines = gcodeContent.split('\n');
 
@@ -57,28 +58,85 @@ function analyzeGCodeBounds(gcodeContent) {
       continue;
     }
 
-    if (trimmed.includes('G90')) isAbsolute = true;
-    if (trimmed.includes('G91')) isAbsolute = false;
+    if (trimmed.includes('G90.1')) isArcAbsolute = true;
+    if (trimmed.includes('G91.1')) isArcAbsolute = false;
+    if (trimmed.includes('G90') && !trimmed.includes('G90.1')) isAbsolute = true;
+    if (trimmed.includes('G91') && !trimmed.includes('G91.1')) isAbsolute = false;
 
     if (trimmed.includes('G53')) continue;
+
+    // Check if this is an arc command (G2 or G3)
+    const isArc = /\bG0*[23]\b/.test(trimmed);
 
     const xMatch = trimmed.match(/X([+-]?\d*\.?\d+)/);
     const yMatch = trimmed.match(/Y([+-]?\d*\.?\d+)/);
     const zMatch = trimmed.match(/Z([+-]?\d*\.?\d+)/);
+    const iMatch = trimmed.match(/I([+-]?\d*\.?\d+)/);
+    const jMatch = trimmed.match(/J([+-]?\d*\.?\d+)/);
+
+    // Store start position for arc calculation
+    const startX = currentX;
+    const startY = currentY;
+
+    // Calculate end position
+    let endX = currentX;
+    let endY = currentY;
+    let endZ = currentZ;
 
     if (xMatch) {
       const val = parseFloat(xMatch[1]);
-      currentX = isAbsolute ? val : currentX + val;
+      endX = isAbsolute ? val : currentX + val;
     }
     if (yMatch) {
       const val = parseFloat(yMatch[1]);
-      currentY = isAbsolute ? val : currentY + val;
+      endY = isAbsolute ? val : currentY + val;
     }
     if (zMatch) {
       const val = parseFloat(zMatch[1]);
-      currentZ = isAbsolute ? val : currentZ + val;
+      endZ = isAbsolute ? val : currentZ + val;
     }
 
+    if (isArc && (iMatch || jMatch)) {
+      // Calculate arc center
+      const i = iMatch ? parseFloat(iMatch[1]) : 0;
+      const j = jMatch ? parseFloat(jMatch[1]) : 0;
+
+      let centerX, centerY;
+      if (isArcAbsolute) {
+        centerX = i;
+        centerY = j;
+      } else {
+        // Incremental mode (default) - I/J are offsets from start position
+        centerX = startX + i;
+        centerY = startY + j;
+      }
+
+      // Calculate radius
+      const radius = Math.sqrt(Math.pow(startX - centerX, 2) + Math.pow(startY - centerY, 2));
+
+      // Calculate start and end angles
+      const startAngle = Math.atan2(startY - centerY, startX - centerX);
+      const endAngle = Math.atan2(endY - centerY, endX - centerX);
+
+      // Determine if arc passes through cardinal points (0°, 90°, 180°, 270°)
+      // This determines the actual min/max extent of the arc
+      const isG2 = /\bG0*2\b/.test(trimmed); // Clockwise
+
+      // Calculate arc extent by checking if cardinal directions are crossed
+      const arcBounds = calculateArcBounds(centerX, centerY, radius, startAngle, endAngle, isG2);
+
+      bounds.min.x = Math.min(bounds.min.x, arcBounds.minX);
+      bounds.min.y = Math.min(bounds.min.y, arcBounds.minY);
+      bounds.max.x = Math.max(bounds.max.x, arcBounds.maxX);
+      bounds.max.y = Math.max(bounds.max.y, arcBounds.maxY);
+    }
+
+    // Update current position
+    currentX = endX;
+    currentY = endY;
+    currentZ = endZ;
+
+    // Update bounds with endpoint
     if (xMatch || yMatch || zMatch) {
       bounds.min.x = Math.min(bounds.min.x, currentX);
       bounds.min.y = Math.min(bounds.min.y, currentY);
@@ -97,6 +155,61 @@ function analyzeGCodeBounds(gcodeContent) {
   if (bounds.max.z === -Infinity) bounds.max.z = 0;
 
   return bounds;
+}
+
+function calculateArcBounds(centerX, centerY, radius, startAngle, endAngle, isClockwise) {
+  // Normalize angles to [0, 2π)
+  const normalize = (angle) => {
+    while (angle < 0) angle += 2 * Math.PI;
+    while (angle >= 2 * Math.PI) angle -= 2 * Math.PI;
+    return angle;
+  };
+
+  const start = normalize(startAngle);
+  const end = normalize(endAngle);
+
+  // Check if an angle is within the arc sweep
+  const isAngleInArc = (angle) => {
+    const a = normalize(angle);
+    if (isClockwise) {
+      // CW: goes from start to end in decreasing angle direction
+      if (start >= end) {
+        return a <= start && a >= end;
+      } else {
+        return a <= start || a >= end;
+      }
+    } else {
+      // CCW: goes from start to end in increasing angle direction
+      if (start <= end) {
+        return a >= start && a <= end;
+      } else {
+        return a >= start || a <= end;
+      }
+    }
+  };
+
+  // Start with endpoints
+  const startX = centerX + radius * Math.cos(startAngle);
+  const startY = centerY + radius * Math.sin(startAngle);
+  const endX = centerX + radius * Math.cos(endAngle);
+  const endY = centerY + radius * Math.sin(endAngle);
+
+  let minX = Math.min(startX, endX);
+  let maxX = Math.max(startX, endX);
+  let minY = Math.min(startY, endY);
+  let maxY = Math.max(startY, endY);
+
+  // Check cardinal directions
+  // Right (0°)
+  if (isAngleInArc(0)) maxX = centerX + radius;
+  // Top (90° or π/2)
+  if (isAngleInArc(Math.PI / 2)) maxY = centerY + radius;
+  // Left (180° or π)
+  if (isAngleInArc(Math.PI)) minX = centerX - radius;
+  // Bottom (270° or 3π/2)
+  if (isAngleInArc(3 * Math.PI / 2)) minY = centerY - radius;
+
+  return { minX, maxX, minY, maxY };
 }
 
 export async function onLoad(ctx) {
