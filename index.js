@@ -930,6 +930,82 @@ function showReplicatorDialog(ctx, params) {
           return SPINDLE_STOP_PATTERN.test(command.trim().toUpperCase());
         }
 
+        // Detect standalone operation name comments like (Bore2), (Trace2), (2D Contour1)
+        function isOperationNameComment(line) {
+          const trimmed = line.trim();
+          // Must be a standalone parentheses comment (not inline with G-code)
+          if (!trimmed.startsWith('(') || !trimmed.endsWith(')')) return false;
+          // Must be short (operation names are typically short)
+          if (trimmed.length > 50) return false;
+          // Extract content inside parentheses
+          const content = trimmed.slice(1, -1).trim();
+          // Skip empty or very short content
+          if (content.length < 2) return false;
+          // Operation names usually don't have colons, equals signs
+          if (content.includes(':') || content.includes('=')) return false;
+          // If it looks like a simple operation name (short, alphanumeric), it's an op name
+          if (/^[A-Za-z0-9_ -]+$/.test(content) && content.length < 30) return true;
+          return false;
+        }
+
+        // Detect if a line starts a new operation (spindle start, first move after retract)
+        function isOperationStart(line) {
+          const trimmed = line.trim().toUpperCase();
+          // Spindle start commands
+          if (/\\bM0*[34]\\b/.test(trimmed)) return true;
+          // G0/G1 with X or Y coordinates (but not G53 machine moves)
+          if (/\\bG0*[01]\\b/.test(trimmed) && /[XY][+-]?\\d/.test(trimmed) && !trimmed.includes('G53')) return true;
+          return false;
+        }
+
+        // Process lines with operation comment repositioning
+        // Buffers operation name comments and outputs them before the next operation start
+        function processLinesWithCommentRepositioning(lines, applyOffsetFn, skipSpindleStop, output) {
+          let pendingComment = null;
+          let afterG53 = false;
+
+          for (const line of lines) {
+            const trimmed = line.trim().toUpperCase();
+
+            // Track G53 (end of operation / retract)
+            if (trimmed.includes('G53')) {
+              afterG53 = true;
+            }
+
+            // Skip spindle stop if requested
+            if (skipSpindleStop && isSpindleStopCommand(line)) {
+              continue;
+            }
+
+            // If this is an operation name comment after G53, buffer it
+            if (isOperationNameComment(line)) {
+              if (afterG53) {
+                pendingComment = line;
+                continue;
+              }
+            }
+
+            // If we have a pending comment and this line starts a new operation, output comment first
+            if (pendingComment && isOperationStart(line)) {
+              output.push(pendingComment);
+              pendingComment = null;
+              afterG53 = false;
+            }
+
+            // Output the line (with offset applied)
+            output.push(applyOffsetFn(line));
+
+            // Clear afterG53 flag when we see meaningful content
+            if (!trimmed.startsWith('(') && !trimmed.startsWith(';') && trimmed !== '') {
+              if (!trimmed.includes('G53')) {
+                afterG53 = false;
+              }
+            }
+          }
+
+          // Don't output orphaned comments at the end - they're for operations in the next part
+        }
+
         function parseToolSegments(gcode) {
           const lines = gcode.split('\\n');
           const segments = [];
@@ -1031,7 +1107,8 @@ function showReplicatorDialog(ctx, params) {
               for (const line of sourceLines) {
                 const trimmed = line.trim().toUpperCase();
 
-                if (trimmed === 'M30' || trimmed === 'M2') continue;
+                // Skip program end commands (we add one at the end)
+                if (/\\bM0*30\\b/.test(trimmed) || /\\bM0*2\\b/.test(trimmed)) continue;
 
                 if (phase === 'preamble') {
                   const isSpindleStart = /\\bM0*[34]\\b/.test(trimmed);
@@ -1072,12 +1149,13 @@ function showReplicatorDialog(ctx, params) {
                 output.push('; ===== Part ' + pos.partNum + ' of ' + totalParts + ' (Row ' + pos.row + ', Col ' + pos.col + ') =====');
                 output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
-                for (const line of cutting) {
-                  if (!isLastPosition && isSpindleStopCommand(line)) {
-                    continue;
-                  }
-                  output.push(applyOffset(line, pos.offsetX, pos.offsetY));
-                }
+                // Process with comment repositioning - moves operation comments to correct positions
+                processLinesWithCommentRepositioning(
+                  cutting,
+                  (line) => applyOffset(line, pos.offsetX, pos.offsetY),
+                  !isLastPosition, // skipSpindleStop
+                  output
+                );
                 output.push('');
               }
 
@@ -1110,6 +1188,12 @@ function showReplicatorDialog(ctx, params) {
                 output.push('M6 T' + toolNum);
                 output.push('');
 
+                // Flatten all segment lines for this tool
+                const allLinesForTool = [];
+                for (const seg of segmentsForTool) {
+                  allLinesForTool.push(...seg.lines);
+                }
+
                 for (let posIndex = 0; posIndex < positions.length; posIndex++) {
                   const pos = positions[posIndex];
                   const isLastPosition = posIndex === positions.length - 1;
@@ -1117,16 +1201,13 @@ function showReplicatorDialog(ctx, params) {
                   output.push('; ----- T' + toolNum + ' Part ' + pos.partNum + ' (Row ' + pos.row + ', Col ' + pos.col + ') -----');
                   output.push('; Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3));
 
-                  // Run all segments for this tool on this position
-                  for (const seg of segmentsForTool) {
-                    for (const line of seg.lines) {
-                      // Skip M5 (spindle stop) for non-last positions - keep spindle running between parts
-                      if (!isLastPosition && isSpindleStopCommand(line)) {
-                        continue;
-                      }
-                      output.push(applyOffset(line, pos.offsetX, pos.offsetY));
-                    }
-                  }
+                  // Process with comment repositioning - moves operation comments to correct positions
+                  processLinesWithCommentRepositioning(
+                    allLinesForTool,
+                    (line) => applyOffset(line, pos.offsetX, pos.offsetY),
+                    !isLastPosition, // skipSpindleStop
+                    output
+                  );
                   output.push('');
                 }
               }
@@ -1145,7 +1226,7 @@ function showReplicatorDialog(ctx, params) {
               const trimmed = line.trim().toUpperCase();
 
               // Skip program end commands entirely (we add one at the end)
-              if (trimmed === 'M30' || trimmed === 'M2') continue;
+              if (/\\bM0*30\\b/.test(trimmed) || /\\bM0*2\\b/.test(trimmed)) continue;
 
               // Detect transition from preamble to cutting
               // Cutting starts with first spindle start (M3/M4) or first move with X/Y
