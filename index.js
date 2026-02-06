@@ -304,6 +304,7 @@ export async function onLoad(ctx) {
 
     showReplicatorDialog(ctx, {
       filename,
+      originalSourceFile,
       gcodeContent,
       bounds,
       machineLimits,
@@ -367,6 +368,7 @@ function showNoFileDialog(ctx) {
 function showReplicatorDialog(ctx, params) {
   const {
     filename,
+    originalSourceFile,
     gcodeContent,
     bounds,
     machineLimits,
