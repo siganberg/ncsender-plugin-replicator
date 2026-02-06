@@ -142,13 +142,18 @@ function analyzeGCodeBounds(gcodeContent) {
     currentY = endY;
     currentZ = endZ;
 
-    // Update bounds with endpoint
-    if (xMatch || yMatch || zMatch) {
+    // Update bounds only for axes explicitly specified on this line
+    // This prevents including the origin (0,0) when moves don't specify all axes
+    if (xMatch) {
       bounds.min.x = Math.min(bounds.min.x, currentX);
-      bounds.min.y = Math.min(bounds.min.y, currentY);
-      bounds.min.z = Math.min(bounds.min.z, currentZ);
       bounds.max.x = Math.max(bounds.max.x, currentX);
+    }
+    if (yMatch) {
+      bounds.min.y = Math.min(bounds.min.y, currentY);
       bounds.max.y = Math.max(bounds.max.y, currentY);
+    }
+    if (zMatch) {
+      bounds.min.z = Math.min(bounds.min.z, currentZ);
       bounds.max.z = Math.max(bounds.max.z, currentZ);
     }
   }
