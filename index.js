@@ -239,6 +239,10 @@ export async function onLoad(ctx) {
       return;
     }
 
+    // Track the original source file - if current file is already replicated/temp,
+    // use its sourceFile, otherwise use the current filename
+    const originalSourceFile = jobLoaded?.sourceFile || filename;
+
     // Always load from cache (current modified program) to allow stacking changes
     // This enables users to apply multiple transformations sequentially
     let gcodeContent;
@@ -719,7 +723,7 @@ function showReplicatorDialog(ctx, params) {
         const partHeight = ${partHeight};
         const machineLimitsX = ${machineLimits.x};
         const machineLimitsY = ${machineLimits.y};
-        const originalFilename = '${filename.replace(/'/g, "\\'")}';
+        const originalFilename = '${originalSourceFile.replace(/'/g, "\\'")}';
         const originalGcode = ${escapedGcode};
 
         const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
