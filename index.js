@@ -142,19 +142,21 @@ function analyzeGCodeBounds(gcodeContent) {
     currentY = endY;
     currentZ = endZ;
 
-    // Update bounds only for axes explicitly specified on this line
-    // This prevents including the origin (0,0) when moves don't specify all axes
-    if (xMatch) {
-      bounds.min.x = Math.min(bounds.min.x, currentX);
-      bounds.max.x = Math.max(bounds.max.x, currentX);
-    }
-    if (yMatch) {
-      bounds.min.y = Math.min(bounds.min.y, currentY);
-      bounds.max.y = Math.max(bounds.max.y, currentY);
-    }
-    if (zMatch) {
-      bounds.min.z = Math.min(bounds.min.z, currentZ);
-      bounds.max.z = Math.max(bounds.max.z, currentZ);
+    // Only update bounds for cutting moves (G1, G2, G3), not rapids (G0)
+    // This excludes rapid positioning moves from origin to workpiece
+    if (motionMode >= 1) {
+      if (xMatch) {
+        bounds.min.x = Math.min(bounds.min.x, currentX);
+        bounds.max.x = Math.max(bounds.max.x, currentX);
+      }
+      if (yMatch) {
+        bounds.min.y = Math.min(bounds.min.y, currentY);
+        bounds.max.y = Math.max(bounds.max.y, currentY);
+      }
+      if (zMatch) {
+        bounds.min.z = Math.min(bounds.min.z, currentZ);
+        bounds.max.z = Math.max(bounds.max.z, currentZ);
+      }
     }
   }
 
