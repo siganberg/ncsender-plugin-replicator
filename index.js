@@ -885,34 +885,45 @@ function showReplicatorDialog(ctx, params) {
         }
 
         // G-code generation functions (browser-side)
-        function applyOffset(line, offsetX, offsetY) {
-          const trimmed = line.trim().toUpperCase();
+        // Creates a stateful offset function that tracks G90/G91 positioning mode.
+        // Each replication position should get its own instance so state resets per part.
+        function createOffsetFn(offsetX, offsetY) {
+          let isAbsolute = true;
 
-          if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed === '' || trimmed.includes('G53')) {
-            return line;
-          }
+          return function(line) {
+            const trimmed = line.trim().toUpperCase();
 
-          if (!trimmed.includes('X') && !trimmed.includes('Y')) {
-            return line;
-          }
+            if (trimmed.startsWith('(') || trimmed.startsWith(';') || trimmed === '' || trimmed.includes('G53')) {
+              return line;
+            }
 
-          if (trimmed.includes('G91')) {
-            return line;
-          }
+            // Track positioning mode changes
+            if (trimmed.includes('G90') && !trimmed.includes('G90.1')) isAbsolute = true;
+            if (trimmed.includes('G91') && !trimmed.includes('G91.1')) isAbsolute = false;
 
-          let result = line;
+            if (!trimmed.includes('X') && !trimmed.includes('Y')) {
+              return line;
+            }
 
-          result = result.replace(/X([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
-            const newValue = parseFloat(value) + offsetX;
-            return 'X' + newValue.toFixed(3);
-          });
+            // Skip incremental mode lines (displacements don't get offset)
+            if (!isAbsolute) {
+              return line;
+            }
 
-          result = result.replace(/Y([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
-            const newValue = parseFloat(value) + offsetY;
-            return 'Y' + newValue.toFixed(3);
-          });
+            let result = line;
 
-          return result;
+            result = result.replace(/X([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
+              const newValue = parseFloat(value) + offsetX;
+              return 'X' + newValue.toFixed(3);
+            });
+
+            result = result.replace(/Y([+-]?\\d*\\.?\\d+)/gi, (match, value) => {
+              const newValue = parseFloat(value) + offsetY;
+              return 'Y' + newValue.toFixed(3);
+            });
+
+            return result;
+          };
         }
 
         // G-code comment detection
@@ -1154,7 +1165,7 @@ function showReplicatorDialog(ctx, params) {
                 // Process with comment repositioning - moves operation comments to correct positions
                 processLinesWithCommentRepositioning(
                   cutting,
-                  (line) => applyOffset(line, pos.offsetX, pos.offsetY),
+                  createOffsetFn(pos.offsetX, pos.offsetY),
                   !isLastPosition, // skipSpindleStop
                   output
                 );
@@ -1206,7 +1217,7 @@ function showReplicatorDialog(ctx, params) {
                   // Process with comment repositioning - moves operation comments to correct positions
                   processLinesWithCommentRepositioning(
                     allLinesForTool,
-                    (line) => applyOffset(line, pos.offsetX, pos.offsetY),
+                    createOffsetFn(pos.offsetX, pos.offsetY),
                     !isLastPosition, // skipSpindleStop
                     output
                   );
@@ -1274,11 +1285,12 @@ function showReplicatorDialog(ctx, params) {
                 output.push('(Part ' + pos.partNum + ' of ' + totalParts + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
                 output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
 
+                const offsetFn = createOffsetFn(pos.offsetX, pos.offsetY);
                 for (const line of cutting) {
                   if (!isLastPosition && isSpindleStopCommand(line)) {
                     continue;
                   }
-                  output.push(applyOffset(line, pos.offsetX, pos.offsetY));
+                  output.push(offsetFn(line));
                 }
                 output.push('');
               }
@@ -1319,7 +1331,7 @@ function showReplicatorDialog(ctx, params) {
                   // Process segment lines with offset
                   processLinesWithCommentRepositioning(
                     seg.lines,
-                    (line) => applyOffset(line, pos.offsetX, pos.offsetY),
+                    createOffsetFn(pos.offsetX, pos.offsetY),
                     !(isLastPosition && isLastSegment), // skipSpindleStop unless last part AND last tool
                     output
                   );
