@@ -1,0 +1,1421 @@
+<style>
+  .replicator-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 30px;
+    gap: 16px;
+    color: var(--color-text-secondary);
+  }
+  .replicator-loading .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: rep-spin 0.8s linear infinite;
+  }
+  @keyframes rep-spin {
+    to { transform: rotate(360deg); }
+  }
+  .no-file-message {
+    padding: 30px;
+    text-align: center;
+    color: var(--color-text-secondary);
+  }
+  .no-file-message h3 {
+    margin: 0 0 12px 0;
+    color: var(--color-text-primary);
+  }
+  .no-file-message p {
+    margin: 0;
+    line-height: 1.5;
+  }
+  .replicator-layout {
+    display: grid;
+    grid-template-columns: 320px 280px;
+    gap: 12px;
+    padding: 16px;
+  }
+  .plugin-dialog-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .form-card {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    padding: 16px;
+    margin-bottom: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  .form-card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: center;
+  }
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    flex: 1;
+    align-content: center;
+  }
+  .summary-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+  .summary-label {
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+  }
+  .summary-value {
+    font-size: 0.9rem;
+    color: var(--color-accent);
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+  label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--color-text-primary);
+    text-align: center;
+  }
+  input[type="number"], input[type="text"], select {
+    padding: 6px 8px;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+  input.input-error {
+    border-color: #dc3545;
+  }
+  .validation-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #dc3545;
+    color: white;
+    padding: 8px 12px;
+    border-radius: var(--radius-small);
+    font-size: 0.8rem;
+    margin-top: 4px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: none;
+  }
+  .validation-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 20px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid #dc3545;
+  }
+  .form-group.has-error .validation-tooltip {
+    display: block;
+  }
+  .validation-message {
+    grid-column: 1 / -1;
+    background: #dc354520;
+    border: 1px solid #dc3545;
+    border-radius: var(--radius-small);
+    padding: 12px;
+    color: #dc3545;
+    font-size: 0.85rem;
+    text-align: center;
+    display: none;
+  }
+  .validation-message.show {
+    display: block;
+  }
+  .button-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-small);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-secondary {
+    background: var(--color-surface-muted);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+  .btn-primary {
+    background: var(--color-accent);
+    color: white;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .checkbox-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+  }
+  .checkbox-text {
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  .checkbox-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-left: 26px;
+  }
+  .slider-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 4px;
+    cursor: pointer;
+    user-select: none;
+    width: fit-content;
+    margin: 0 auto;
+  }
+  .slider-option {
+    position: relative;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    transition: color 0.2s ease;
+    z-index: 1;
+  }
+  .slider-option.active {
+    color: var(--color-text-primary);
+  }
+  .slider-indicator {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    background: var(--color-accent);
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    z-index: 0;
+  }
+</style>
+
+<div id="replicator-root">
+  <div class="replicator-loading" id="replicator-loading">
+    <div class="spinner"></div>
+    <span>Loading...</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  var FALLBACK_PORT = __SERVER_PORT__;
+  var initialConfig = __INITIAL_CONFIG__;
+
+  var resolveApiBaseUrl = function() {
+    if (window.ncSender && typeof window.ncSender.getApiBaseUrl === 'function') {
+      return window.ncSender.getApiBaseUrl(FALLBACK_PORT);
+    }
+    return '';
+  };
+
+  var BASE_URL = resolveApiBaseUrl();
+
+  // ---- G-code analysis (moved from index.js) ----
+
+  function calculateArcBounds(centerX, centerY, radius, startAngle, endAngle, isClockwise) {
+    var normalize = function(angle) {
+      while (angle < 0) angle += 2 * Math.PI;
+      while (angle >= 2 * Math.PI) angle -= 2 * Math.PI;
+      return angle;
+    };
+
+    var start = normalize(startAngle);
+    var end = normalize(endAngle);
+
+    var isAngleInArc = function(angle) {
+      var a = normalize(angle);
+      if (isClockwise) {
+        if (start >= end) {
+          return a <= start && a >= end;
+        } else {
+          return a <= start || a >= end;
+        }
+      } else {
+        if (start <= end) {
+          return a >= start && a <= end;
+        } else {
+          return a >= start || a <= end;
+        }
+      }
+    };
+
+    var sX = centerX + radius * Math.cos(startAngle);
+    var sY = centerY + radius * Math.sin(startAngle);
+    var eX = centerX + radius * Math.cos(endAngle);
+    var eY = centerY + radius * Math.sin(endAngle);
+
+    var minX = Math.min(sX, eX);
+    var maxX = Math.max(sX, eX);
+    var minY = Math.min(sY, eY);
+    var maxY = Math.max(sY, eY);
+
+    if (isAngleInArc(0)) maxX = centerX + radius;
+    if (isAngleInArc(Math.PI / 2)) maxY = centerY + radius;
+    if (isAngleInArc(Math.PI)) minX = centerX - radius;
+    if (isAngleInArc(3 * Math.PI / 2)) minY = centerY - radius;
+
+    return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+  }
+
+  function analyzeGCodeBounds(gcodeContent) {
+    var bounds = {
+      min: { x: Infinity, y: Infinity, z: Infinity },
+      max: { x: -Infinity, y: -Infinity, z: -Infinity }
+    };
+
+    var currentX = 0, currentY = 0, currentZ = 0;
+    var isAbsolute = true;
+    var isArcAbsolute = false;
+    var motionMode = 0;
+
+    var lines = gcodeContent.split('\n');
+
+    for (var li = 0; li < lines.length; li++) {
+      var trimmed = lines[li].trim().toUpperCase();
+
+      if (trimmed.charAt(0) === '(' || trimmed.charAt(0) === ';' || trimmed.charAt(0) === '%') {
+        continue;
+      }
+
+      if (trimmed.indexOf('G90.1') !== -1) isArcAbsolute = true;
+      if (trimmed.indexOf('G91.1') !== -1) isArcAbsolute = false;
+      if (trimmed.indexOf('G90') !== -1 && trimmed.indexOf('G90.1') === -1) isAbsolute = true;
+      if (trimmed.indexOf('G91') !== -1 && trimmed.indexOf('G91.1') === -1) isAbsolute = false;
+
+      if (trimmed.indexOf('G53') !== -1) continue;
+
+      if (/\bG0*0\b/.test(trimmed)) motionMode = 0;
+      if (/\bG0*1\b/.test(trimmed)) motionMode = 1;
+      if (/\bG0*2\b/.test(trimmed)) motionMode = 2;
+      if (/\bG0*3\b/.test(trimmed)) motionMode = 3;
+
+      var xMatch = trimmed.match(/X([+-]?\d*\.?\d+)/);
+      var yMatch = trimmed.match(/Y([+-]?\d*\.?\d+)/);
+      var zMatch = trimmed.match(/Z([+-]?\d*\.?\d+)/);
+      var iMatch = trimmed.match(/I([+-]?\d*\.?\d+)/);
+      var jMatch = trimmed.match(/J([+-]?\d*\.?\d+)/);
+
+      var startX = currentX;
+      var startY = currentY;
+
+      var endX = currentX;
+      var endY = currentY;
+      var endZ = currentZ;
+
+      if (xMatch) {
+        var val = parseFloat(xMatch[1]);
+        endX = isAbsolute ? val : currentX + val;
+      }
+      if (yMatch) {
+        var val = parseFloat(yMatch[1]);
+        endY = isAbsolute ? val : currentY + val;
+      }
+      if (zMatch) {
+        var val = parseFloat(zMatch[1]);
+        endZ = isAbsolute ? val : currentZ + val;
+      }
+
+      var isArc = (motionMode === 2 || motionMode === 3) && (iMatch || jMatch);
+
+      if (isArc) {
+        var i = iMatch ? parseFloat(iMatch[1]) : 0;
+        var j = jMatch ? parseFloat(jMatch[1]) : 0;
+
+        var centerX, centerY;
+        if (isArcAbsolute) {
+          centerX = i;
+          centerY = j;
+        } else {
+          centerX = startX + i;
+          centerY = startY + j;
+        }
+
+        var radius = Math.sqrt(Math.pow(startX - centerX, 2) + Math.pow(startY - centerY, 2));
+        var arcStartAngle = Math.atan2(startY - centerY, startX - centerX);
+        var arcEndAngle = Math.atan2(endY - centerY, endX - centerX);
+        var isG2 = motionMode === 2;
+
+        var arcBounds = calculateArcBounds(centerX, centerY, radius, arcStartAngle, arcEndAngle, isG2);
+
+        bounds.min.x = Math.min(bounds.min.x, arcBounds.minX);
+        bounds.min.y = Math.min(bounds.min.y, arcBounds.minY);
+        bounds.max.x = Math.max(bounds.max.x, arcBounds.maxX);
+        bounds.max.y = Math.max(bounds.max.y, arcBounds.maxY);
+      }
+
+      currentX = endX;
+      currentY = endY;
+      currentZ = endZ;
+
+      if (motionMode >= 1) {
+        if (xMatch) {
+          bounds.min.x = Math.min(bounds.min.x, currentX);
+          bounds.max.x = Math.max(bounds.max.x, currentX);
+        }
+        if (yMatch) {
+          bounds.min.y = Math.min(bounds.min.y, currentY);
+          bounds.max.y = Math.max(bounds.max.y, currentY);
+        }
+        if (zMatch) {
+          bounds.min.z = Math.min(bounds.min.z, currentZ);
+          bounds.max.z = Math.max(bounds.max.z, currentZ);
+        }
+      }
+    }
+
+    if (bounds.min.x === Infinity) bounds.min.x = 0;
+    if (bounds.min.y === Infinity) bounds.min.y = 0;
+    if (bounds.min.z === Infinity) bounds.min.z = 0;
+    if (bounds.max.x === -Infinity) bounds.max.x = 0;
+    if (bounds.max.y === -Infinity) bounds.max.y = 0;
+    if (bounds.max.z === -Infinity) bounds.max.z = 0;
+
+    return bounds;
+  }
+
+  // ---- UI rendering ----
+
+  function showNoFile() {
+    var root = document.getElementById('replicator-root');
+    root.innerHTML =
+      '<div class="no-file-message">' +
+        '<h3>No G-Code Program Loaded</h3>' +
+        '<p>Please load a G-code program first before using the Replicator tool.</p>' +
+      '</div>' +
+      '<div class="button-group" style="padding: 16px 20px; border-top: 1px solid var(--color-border);">' +
+        '<button class="btn btn-primary" id="rep-ok-btn">OK</button>' +
+      '</div>';
+    document.getElementById('rep-ok-btn').addEventListener('click', function() {
+      window.postMessage({ type: 'close-plugin-dialog' }, '*');
+    });
+  }
+
+  function showError(msg) {
+    var root = document.getElementById('replicator-root');
+    root.innerHTML =
+      '<div class="no-file-message">' +
+        '<h3>Error</h3>' +
+        '<p>' + msg + '</p>' +
+      '</div>' +
+      '<div class="button-group" style="padding: 16px 20px; border-top: 1px solid var(--color-border);">' +
+        '<button class="btn btn-primary" id="rep-ok-btn">OK</button>' +
+      '</div>';
+    document.getElementById('rep-ok-btn').addEventListener('click', function() {
+      window.postMessage({ type: 'close-plugin-dialog' }, '*');
+    });
+  }
+
+  function showReplicatorForm(params) {
+    var filename = params.filename;
+    var originalSourceFile = params.originalSourceFile;
+    var gcodeContent = params.gcodeContent;
+    var bounds = params.bounds;
+    var machineLimits = params.machineLimits;
+    var settings = params.settings;
+    var isImperial = params.isImperial;
+    var distanceUnit = params.distanceUnit;
+    var partWidth = params.partWidth;
+    var partHeight = params.partHeight;
+
+    var convertToDisplay = function(value) {
+      return isImperial ? value / 25.4 : value;
+    };
+    var convertToMetric = function(value) {
+      return isImperial ? value * 25.4 : value;
+    };
+
+    var root = document.getElementById('replicator-root');
+    root.innerHTML =
+      '<div class="replicator-layout">' +
+        '<form id="replicatorForm" novalidate>' +
+          '<div class="form-card">' +
+            '<div class="form-card-title">Configuration</div>' +
+            '<div class="form-row">' +
+              '<div class="form-group">' +
+                '<label for="columns">Columns (X)</label>' +
+                '<input type="number" id="columns" min="1" max="50" step="1" value="' + settings.columns + '" required>' +
+              '</div>' +
+              '<div class="form-group">' +
+                '<label>X Direction</label>' +
+                '<div class="slider-toggle" id="columnDirection" data-value="' + settings.columnDirection + '">' +
+                  '<span class="slider-option ' + (settings.columnDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
+                  '<span class="slider-option ' + (settings.columnDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
+                  '<div class="slider-indicator"></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="form-row">' +
+              '<div class="form-group">' +
+                '<label for="rows">Rows (Y)</label>' +
+                '<input type="number" id="rows" min="1" max="50" step="1" value="' + settings.rows + '" required>' +
+              '</div>' +
+              '<div class="form-group">' +
+                '<label>Y Direction</label>' +
+                '<div class="slider-toggle" id="rowDirection" data-value="' + settings.rowDirection + '">' +
+                  '<span class="slider-option ' + (settings.rowDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
+                  '<span class="slider-option ' + (settings.rowDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
+                  '<div class="slider-indicator"></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="form-row">' +
+              '<div class="form-group">' +
+                '<label for="gapX">X Gap (' + distanceUnit + ')</label>' +
+                '<input type="number" id="gapX" min="0" step="0.1" value="' + settings.gapX + '" required>' +
+              '</div>' +
+              '<div class="form-group">' +
+                '<label for="gapY">Y Gap (' + distanceUnit + ')</label>' +
+                '<input type="number" id="gapY" min="0" step="0.1" value="' + settings.gapY + '" required>' +
+              '</div>' +
+            '</div>' +
+            '<div class="checkbox-row" style="margin-top: 8px;">' +
+              '<label class="checkbox-label">' +
+                '<input type="checkbox" id="sortByTool" ' + (settings.sortByTool ? 'checked' : '') + '>' +
+                '<span class="checkbox-text">Sort by Tool</span>' +
+              '</label>' +
+              '<span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>' +
+            '</div>' +
+            '<div class="form-group" style="margin-top: 12px; position: relative;">' +
+              '<label for="skipInstances">Skip Instances</label>' +
+              '<input type="text" id="skipInstances" placeholder="e.g. 1-4, 7, 9" value="' + settings.skipInstances + '">' +
+              '<div class="validation-tooltip" id="skipInstances-error"></div>' +
+              '<span class="checkbox-hint" style="margin-left: 0; margin-top: 4px;">Skip specific parts (ranges: 1-4, individual: 5, 7, or combined: 1-4, 7, 9)</span>' +
+            '</div>' +
+          '</div>' +
+        '</form>' +
+
+        '<div class="form-card summary-card">' +
+          '<div class="form-card-title">Summary</div>' +
+          '<div class="summary-grid">' +
+            '<div class="summary-row">' +
+              '<span class="summary-label">Source File:</span>' +
+              '<span class="summary-value">' + filename + '</span>' +
+            '</div>' +
+            '<div class="summary-row">' +
+              '<span class="summary-label">Part Size:</span>' +
+              '<span class="summary-value">' + convertToDisplay(partWidth).toFixed(1) + ' x ' + convertToDisplay(partHeight).toFixed(1) + ' ' + distanceUnit + '</span>' +
+            '</div>' +
+            '<div class="summary-row">' +
+              '<span class="summary-label">Machine Limits:</span>' +
+              '<span class="summary-value">' + convertToDisplay(machineLimits.x).toFixed(0) + ' x ' + convertToDisplay(machineLimits.y).toFixed(0) + ' ' + distanceUnit + '</span>' +
+            '</div>' +
+            '<div class="summary-row">' +
+              '<span class="summary-label">Total Replicas:</span>' +
+              '<span class="summary-value" id="totalParts">-</span>' +
+            '</div>' +
+            '<div class="summary-row" id="skippedRow" style="display: none;">' +
+              '<span class="summary-label">Skipping:</span>' +
+              '<span class="summary-value" id="generatingParts">-</span>' +
+            '</div>' +
+            '<div class="summary-row">' +
+              '<span class="summary-label">Grid Size:</span>' +
+              '<span class="summary-value" id="gridSize">-</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="validation-message" id="validationMessage"></div>' +
+      '</div>' +
+
+      '<div class="plugin-dialog-footer">' +
+        '<div class="button-group">' +
+          '<button type="button" class="btn btn-secondary" id="rep-cancel-btn">Cancel</button>' +
+          '<button type="button" class="btn btn-primary" id="generateBtn">Generate</button>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('rep-cancel-btn').addEventListener('click', function() {
+      window.postMessage({ type: 'close-plugin-dialog' }, '*');
+    });
+    document.getElementById('generateBtn').addEventListener('click', function() {
+      document.getElementById('replicatorForm').requestSubmit();
+    });
+
+    // ---- Skip instances parsing & validation ----
+
+    function parseSkipInstances(input, maxParts) {
+      var skipSet = new Set();
+      if (!input || !input.trim()) return skipSet;
+
+      var parts = input.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+      for (var pi = 0; pi < parts.length; pi++) {
+        var part = parts[pi];
+        if (part.indexOf('-') !== -1) {
+          var range = part.split('-').map(function(s) { return s.trim(); });
+          var start = parseInt(range[0], 10);
+          var end = parseInt(range[1], 10);
+          if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+            for (var i = start; i <= Math.min(end, maxParts); i++) {
+              skipSet.add(i);
+            }
+          }
+        } else {
+          var num = parseInt(part, 10);
+          if (!isNaN(num) && num > 0 && num <= maxParts) {
+            skipSet.add(num);
+          }
+        }
+      }
+      return skipSet;
+    }
+
+    function validateSkipInstances(input, maxParts) {
+      if (!input || !input.trim()) return null;
+
+      var parts = input.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+      for (var pi = 0; pi < parts.length; pi++) {
+        var part = parts[pi];
+        if (part.indexOf('-') !== -1) {
+          var rangeParts = part.split('-');
+          if (rangeParts.length !== 2) {
+            return 'Invalid range format: ' + part;
+          }
+          var startStr = rangeParts[0].trim();
+          var endStr = rangeParts[1].trim();
+          if (!startStr || !endStr) {
+            return 'Invalid range: ' + part;
+          }
+          var start = parseInt(startStr, 10);
+          var end = parseInt(endStr, 10);
+          if (isNaN(start) || isNaN(end)) {
+            return 'Invalid numbers in range: ' + part;
+          }
+          if (start < 1) {
+            return 'Range start must be >= 1: ' + part;
+          }
+          if (end < start) {
+            return 'Range end must be >= start: ' + part;
+          }
+          if (start > maxParts) {
+            return 'Range start exceeds total parts (' + maxParts + '): ' + part;
+          }
+        } else {
+          var num = parseInt(part, 10);
+          if (isNaN(num)) {
+            return 'Invalid number: ' + part;
+          }
+          if (num < 1) {
+            return 'Instance must be >= 1: ' + part;
+          }
+          if (num > maxParts) {
+            return 'Instance exceeds total parts (' + maxParts + '): ' + part;
+          }
+        }
+      }
+      return null;
+    }
+
+    // ---- Output filename ----
+
+    function getOutputFilename() {
+      var rows = parseInt(document.getElementById('rows').value) || 1;
+      var columns = parseInt(document.getElementById('columns').value) || 1;
+      var baseName = originalSourceFile.replace(/\.[^.]+$/, '');
+      return baseName + '_' + rows + 'x' + columns + '.nc';
+    }
+
+    // ---- Preview update ----
+
+    function updatePreview() {
+      var rows = parseInt(document.getElementById('rows').value) || 1;
+      var columns = parseInt(document.getElementById('columns').value) || 1;
+      var gapX = parseFloat(document.getElementById('gapX').value) || 0;
+      var gapY = parseFloat(document.getElementById('gapY').value) || 0;
+      var skipInput = document.getElementById('skipInstances').value || '';
+
+      var gapXMm = convertToMetric(gapX);
+      var gapYMm = convertToMetric(gapY);
+
+      var totalParts = rows * columns;
+
+      // Validate skip instances
+      var skipError = validateSkipInstances(skipInput, totalParts);
+      var skipInputEl = document.getElementById('skipInstances');
+      var skipErrorEl = document.getElementById('skipInstances-error');
+      var skipFormGroup = skipInputEl.closest('.form-group');
+
+      if (skipError) {
+        skipInputEl.classList.add('input-error');
+        if (skipFormGroup) skipFormGroup.classList.add('has-error');
+        if (skipErrorEl) skipErrorEl.textContent = skipError;
+      } else {
+        skipInputEl.classList.remove('input-error');
+        if (skipFormGroup) skipFormGroup.classList.remove('has-error');
+        if (skipErrorEl) skipErrorEl.textContent = '';
+      }
+
+      var skipSet = skipError ? new Set() : parseSkipInstances(skipInput, totalParts);
+      var generatingCount = totalParts - skipSet.size;
+
+      var gridWidthMm = columns * partWidth + (columns - 1) * gapXMm;
+      var gridHeightMm = rows * partHeight + (rows - 1) * gapYMm;
+
+      var skippedRow = document.getElementById('skippedRow');
+      if (skipSet.size > 0 && !skipError) {
+        document.getElementById('totalParts').textContent = generatingCount + ' of ' + totalParts;
+        skippedRow.style.display = '';
+        document.getElementById('generatingParts').textContent = Array.from(skipSet).sort(function(a, b) { return a - b; }).join(', ');
+      } else {
+        document.getElementById('totalParts').textContent = totalParts;
+        skippedRow.style.display = 'none';
+      }
+      document.getElementById('gridSize').textContent =
+        convertToDisplay(gridWidthMm).toFixed(1) + ' x ' +
+        convertToDisplay(gridHeightMm).toFixed(1) + ' ' + distanceUnit;
+
+      var validationMsg = document.getElementById('validationMessage');
+      var generateBtn = document.getElementById('generateBtn');
+
+      if (skipError) {
+        validationMsg.classList.remove('show');
+        generateBtn.disabled = true;
+      } else if (gridWidthMm > machineLimits.x || gridHeightMm > machineLimits.y) {
+        validationMsg.textContent = 'Grid size exceeds machine limits! ' +
+          'Grid: ' + convertToDisplay(gridWidthMm).toFixed(1) + ' x ' + convertToDisplay(gridHeightMm).toFixed(1) + ' ' + distanceUnit + ', ' +
+          'Machine: ' + convertToDisplay(machineLimits.x).toFixed(0) + ' x ' + convertToDisplay(machineLimits.y).toFixed(0) + ' ' + distanceUnit;
+        validationMsg.classList.add('show');
+        generateBtn.disabled = true;
+      } else if (gapXMm < 0 || gapYMm < 0) {
+        validationMsg.textContent = 'Warning: Negative gap will cause parts to overlap.';
+        validationMsg.classList.add('show');
+        generateBtn.disabled = false;
+      } else {
+        validationMsg.classList.remove('show');
+        generateBtn.disabled = false;
+      }
+    }
+
+    // ---- G-code generation functions ----
+
+    function createOffsetFn(offsetX, offsetY) {
+      var isAbsolute = true;
+
+      return function(line) {
+        var trimmed = line.trim().toUpperCase();
+
+        if (trimmed.charAt(0) === '(' || trimmed.charAt(0) === ';' || trimmed === '' || trimmed.indexOf('G53') !== -1) {
+          return line;
+        }
+
+        if (trimmed.indexOf('G90') !== -1 && trimmed.indexOf('G90.1') === -1) isAbsolute = true;
+        if (trimmed.indexOf('G91') !== -1 && trimmed.indexOf('G91.1') === -1) isAbsolute = false;
+
+        if (trimmed.indexOf('X') === -1 && trimmed.indexOf('Y') === -1) {
+          return line;
+        }
+
+        if (!isAbsolute) {
+          return line;
+        }
+
+        var result = line;
+
+        result = result.replace(/X([+-]?\d*\.?\d+)/gi, function(match, value) {
+          var newValue = parseFloat(value) + offsetX;
+          return 'X' + newValue.toFixed(3);
+        });
+
+        result = result.replace(/Y([+-]?\d*\.?\d+)/gi, function(match, value) {
+          var newValue = parseFloat(value) + offsetY;
+          return 'Y' + newValue.toFixed(3);
+        });
+
+        return result;
+      };
+    }
+
+    function isGcodeComment(command) {
+      var trimmed = command.trim();
+      var withoutLineNumber = trimmed.replace(/^N\d+\s*/i, '');
+      if (withoutLineNumber.charAt(0) === ';') return true;
+      if (withoutLineNumber.charAt(0) === '(' && withoutLineNumber.charAt(withoutLineNumber.length - 1) === ')') return true;
+      return false;
+    }
+
+    var SPINDLE_STOP_PATTERN = /(?:^|[^A-Z0-9])M0*5(?:[^0-9]|$)/i;
+    function isSpindleStopCommand(command) {
+      if (!command || typeof command !== 'string') return false;
+      if (isGcodeComment(command)) return false;
+      return SPINDLE_STOP_PATTERN.test(command.trim().toUpperCase());
+    }
+
+    function isOperationNameComment(line) {
+      var trimmed = line.trim();
+      if (trimmed.charAt(0) !== '(' || trimmed.charAt(trimmed.length - 1) !== ')') return false;
+      if (trimmed.length > 50) return false;
+      var content = trimmed.slice(1, -1).trim();
+      if (content.length < 2) return false;
+      if (content.indexOf(':') !== -1 || content.indexOf('=') !== -1) return false;
+      if (/^[A-Za-z0-9_ -]+$/.test(content) && content.length < 30) return true;
+      return false;
+    }
+
+    function isOperationStart(line) {
+      var trimmed = line.trim().toUpperCase();
+      if (/\bM0*[34]\b/.test(trimmed)) return true;
+      if (/\bG0*[01]\b/.test(trimmed) && /[XY][+-]?\d/.test(trimmed) && trimmed.indexOf('G53') === -1) return true;
+      return false;
+    }
+
+    function processLinesWithCommentRepositioning(lines, applyOffsetFn, skipSpindleStop, output) {
+      var pendingComment = null;
+      var afterG53 = false;
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var trimmed = line.trim().toUpperCase();
+
+        if (trimmed.indexOf('G53') !== -1) {
+          afterG53 = true;
+        }
+
+        if (skipSpindleStop && isSpindleStopCommand(line)) {
+          continue;
+        }
+
+        if (isOperationNameComment(line)) {
+          if (afterG53) {
+            pendingComment = line;
+            continue;
+          }
+        }
+
+        if (pendingComment && isOperationStart(line)) {
+          output.push(pendingComment);
+          pendingComment = null;
+          afterG53 = false;
+        }
+
+        output.push(applyOffsetFn(line));
+
+        if (trimmed.charAt(0) !== '(' && trimmed.charAt(0) !== ';' && trimmed !== '') {
+          if (trimmed.indexOf('G53') === -1) {
+            afterG53 = false;
+          }
+        }
+      }
+    }
+
+    function parseToolSegments(gcode) {
+      var lines = gcode.split('\n');
+      var segments = [];
+      var currentSegment = { toolNum: null, lines: [], isHeader: true };
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var trimmed = line.trim().toUpperCase();
+
+        if (trimmed === 'M30' || trimmed === 'M2') continue;
+
+        var m6Match = trimmed.match(/M6\s*T(\d+)|T(\d+)\s*M6/i);
+        var tMatch = trimmed.match(/^T(\d+)$/i);
+
+        if (m6Match || tMatch) {
+          if (currentSegment.lines.length > 0) {
+            segments.push(currentSegment);
+          }
+
+          var toolNum = m6Match ? (m6Match[1] || m6Match[2]) : tMatch[1];
+          currentSegment = { toolNum: parseInt(toolNum), lines: [], isHeader: false };
+        } else {
+          currentSegment.lines.push(line);
+        }
+      }
+
+      if (currentSegment.lines.length > 0) {
+        segments.push(currentSegment);
+      }
+
+      return segments;
+    }
+
+    function generateReplicatedGCode(originalGcode, options) {
+      var rows = options.rows;
+      var columns = options.columns;
+      var rowDirection = options.rowDirection;
+      var columnDirection = options.columnDirection;
+      var spacingX = options.spacingX;
+      var spacingY = options.spacingY;
+      var gapX = options.gapX;
+      var gapY = options.gapY;
+      var sortByTool = options.sortByTool;
+      var skipInstances = options.skipInstances;
+      var origFilename = options.originalFilename;
+
+      var xMultiplier = columnDirection === 'positive' ? 1 : -1;
+      var yMultiplier = rowDirection === 'positive' ? 1 : -1;
+      var totalParts = rows * columns;
+
+      var output = [];
+
+      var skipSet = parseSkipInstances(skipInstances, totalParts);
+
+      output.push('(Replicated G-code generated by Replicator Plugin)');
+      output.push('(Source: ' + origFilename + ')');
+      output.push('(Grid: ' + columns + ' columns x ' + rows + ' rows = ' + totalParts + ' parts)');
+      if (skipSet.size > 0) {
+        output.push('(Skipped instances: ' + Array.from(skipSet).sort(function(a, b) { return a - b; }).join(', ') + ')');
+        output.push('(Generating: ' + (totalParts - skipSet.size) + ' parts)');
+      }
+      output.push('(Gap: X=' + gapX.toFixed(3) + 'mm, Y=' + gapY.toFixed(3) + 'mm)');
+      output.push('(X Direction: ' + columnDirection + ', Y Direction: ' + rowDirection + ')');
+      output.push('(Sort by Tool: ' + (sortByTool ? 'Yes' : 'No') + ')');
+      output.push('');
+
+      var positions = [];
+      for (var row = 0; row < rows; row++) {
+        for (var col = 0; col < columns; col++) {
+          var partNum = row * columns + col + 1;
+          if (skipSet.has(partNum)) continue;
+          positions.push({
+            partNum: partNum,
+            row: row + 1,
+            col: col + 1,
+            offsetX: col * spacingX * xMultiplier,
+            offsetY: row * spacingY * yMultiplier
+          });
+        }
+      }
+
+      if (sortByTool) {
+        var segments = parseToolSegments(originalGcode);
+        var headerSegment = segments.find(function(s) { return s.isHeader; });
+        var toolSegments = segments.filter(function(s) { return !s.isHeader; });
+
+        if (toolSegments.length === 0) {
+          output.push('(No tool changes detected, using standard replication)');
+          output.push('');
+
+          var sourceLines = headerSegment ? headerSegment.lines : originalGcode.split('\n');
+          var preamble = [];
+          var cutting = [];
+          var postamble = [];
+          var phase = 'preamble';
+
+          for (var li = 0; li < sourceLines.length; li++) {
+            var line = sourceLines[li];
+            var trimmed = line.trim().toUpperCase();
+
+            if (/\bM0*30\b/.test(trimmed) || /\bM0*2\b/.test(trimmed)) continue;
+
+            if (phase === 'preamble') {
+              var isSpindleStart = /\bM0*[34]\b/.test(trimmed);
+              var hasXY = /[XY][+-]?\d/.test(trimmed) && !/G53/.test(trimmed);
+              if (isSpindleStart || hasXY) {
+                phase = 'cutting';
+              }
+            }
+
+            if (phase === 'cutting') {
+              var isG53 = /G53/.test(trimmed);
+              var isStop = isSpindleStopCommand(line);
+              if (isG53 || isStop) {
+                phase = 'postamble';
+              }
+            }
+
+            if (phase === 'preamble') {
+              preamble.push(line);
+            } else if (phase === 'cutting') {
+              cutting.push(line);
+            } else {
+              postamble.push(line);
+            }
+          }
+
+          for (var i = 0; i < preamble.length; i++) {
+            output.push(preamble[i]);
+          }
+          output.push('');
+
+          for (var posIndex = 0; posIndex < positions.length; posIndex++) {
+            var pos = positions[posIndex];
+            var isLast = posIndex === positions.length - 1;
+
+            output.push('(Part ' + pos.partNum + ' of ' + totalParts + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
+            output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
+
+            processLinesWithCommentRepositioning(
+              cutting,
+              createOffsetFn(pos.offsetX, pos.offsetY),
+              !isLast,
+              output
+            );
+            output.push('');
+          }
+
+          for (var i = 0; i < postamble.length; i++) {
+            output.push(postamble[i]);
+          }
+        } else {
+          var toolGroups = {};
+          var toolOrder = [];
+          for (var si = 0; si < toolSegments.length; si++) {
+            var seg = toolSegments[si];
+            if (!toolGroups[seg.toolNum]) {
+              toolGroups[seg.toolNum] = [];
+              toolOrder.push(seg.toolNum);
+            }
+            toolGroups[seg.toolNum].push(seg);
+          }
+
+          output.push('(Tool order optimized to minimize tool changes)');
+          output.push('(Unique tools: ' + toolOrder.map(function(t) { return 'T' + t; }).join(', ') + ')');
+          output.push('(Total tool changes: ' + toolOrder.length + ', reduced from ' + (toolSegments.length * totalParts) + ')');
+          output.push('');
+
+          for (var ti = 0; ti < toolOrder.length; ti++) {
+            var toolNum = toolOrder[ti];
+            var segsForTool = toolGroups[toolNum];
+
+            output.push('(Tool T' + toolNum + ' - All Parts)');
+            output.push('M6 T' + toolNum);
+            output.push('');
+
+            var allLinesForTool = [];
+            for (var si = 0; si < segsForTool.length; si++) {
+              allLinesForTool = allLinesForTool.concat(segsForTool[si].lines);
+            }
+
+            for (var posIndex = 0; posIndex < positions.length; posIndex++) {
+              var pos = positions[posIndex];
+              var isLast = posIndex === positions.length - 1;
+
+              output.push('(T' + toolNum + ' Part ' + pos.partNum + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
+              output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
+
+              processLinesWithCommentRepositioning(
+                allLinesForTool,
+                createOffsetFn(pos.offsetX, pos.offsetY),
+                !isLast,
+                output
+              );
+              output.push('');
+            }
+          }
+        }
+      } else {
+        var segments = parseToolSegments(originalGcode);
+        var headerSegment = segments.find(function(s) { return s.isHeader; });
+        var toolSegments = segments.filter(function(s) { return !s.isHeader; });
+
+        if (toolSegments.length === 0) {
+          var sourceLines = headerSegment ? headerSegment.lines : originalGcode.split('\n');
+          var preamble = [];
+          var cutting = [];
+          var postamble = [];
+          var phase = 'preamble';
+
+          for (var li = 0; li < sourceLines.length; li++) {
+            var line = sourceLines[li];
+            var trimmed = line.trim().toUpperCase();
+
+            if (/\bM0*30\b/.test(trimmed) || /\bM0*2\b/.test(trimmed)) continue;
+
+            if (phase === 'preamble') {
+              var isSpindleStart = /\bM0*[34]\b/.test(trimmed);
+              var hasXY = /[XY][+-]?\d/.test(trimmed) && !/G53/.test(trimmed);
+              if (isSpindleStart || hasXY) {
+                phase = 'cutting';
+              }
+            }
+
+            if (phase === 'cutting') {
+              var isG53 = /G53/.test(trimmed);
+              var isStop = isSpindleStopCommand(line);
+              if (isG53 || isStop) {
+                phase = 'postamble';
+              }
+            }
+
+            if (phase === 'preamble') {
+              preamble.push(line);
+            } else if (phase === 'cutting') {
+              cutting.push(line);
+            } else {
+              postamble.push(line);
+            }
+          }
+
+          for (var i = 0; i < preamble.length; i++) {
+            output.push(preamble[i]);
+          }
+          output.push('');
+
+          for (var posIndex = 0; posIndex < positions.length; posIndex++) {
+            var pos = positions[posIndex];
+            var isLast = posIndex === positions.length - 1;
+
+            output.push('(Part ' + pos.partNum + ' of ' + totalParts + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
+            output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
+
+            var offsetFn = createOffsetFn(pos.offsetX, pos.offsetY);
+            for (var ci = 0; ci < cutting.length; ci++) {
+              if (!isLast && isSpindleStopCommand(cutting[ci])) {
+                continue;
+              }
+              output.push(offsetFn(cutting[ci]));
+            }
+            output.push('');
+          }
+
+          for (var i = 0; i < postamble.length; i++) {
+            output.push(postamble[i]);
+          }
+        } else {
+          output.push('(Standard replication - all tools per part in original order)');
+          output.push('(Tool changes per part: ' + toolSegments.length + ')');
+          output.push('');
+
+          if (headerSegment && headerSegment.lines.length > 0) {
+            for (var i = 0; i < headerSegment.lines.length; i++) {
+              output.push(headerSegment.lines[i]);
+            }
+            output.push('');
+          }
+
+          for (var posIndex = 0; posIndex < positions.length; posIndex++) {
+            var pos = positions[posIndex];
+            var isLastPosition = posIndex === positions.length - 1;
+
+            output.push('(Part ' + pos.partNum + ' of ' + totalParts + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
+            output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
+            output.push('');
+
+            for (var segIndex = 0; segIndex < toolSegments.length; segIndex++) {
+              var seg = toolSegments[segIndex];
+              var isLastSegment = segIndex === toolSegments.length - 1;
+
+              output.push('T' + seg.toolNum + ' M6');
+
+              processLinesWithCommentRepositioning(
+                seg.lines,
+                createOffsetFn(pos.offsetX, pos.offsetY),
+                !(isLastPosition && isLastSegment),
+                output
+              );
+              output.push('');
+            }
+          }
+        }
+      }
+
+      output.push('M30 (Program end)');
+
+      return output.join('\n');
+    }
+
+    // ---- Event listeners ----
+
+    ['rows', 'columns', 'gapX', 'gapY', 'skipInstances'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', updatePreview);
+        el.addEventListener('change', updatePreview);
+      }
+    });
+
+    ['rows', 'columns'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', function() {
+          document.getElementById('skipInstances').value = '';
+          updatePreview();
+        });
+      }
+    });
+
+    var skipInstancesInput = document.getElementById('skipInstances');
+    if (skipInstancesInput) {
+      skipInstancesInput.addEventListener('keypress', function(e) {
+        var allowedChars = /[0-9,\- ]/;
+        if (!allowedChars.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+          e.preventDefault();
+        }
+      });
+      skipInstancesInput.addEventListener('paste', function(e) {
+        e.preventDefault();
+        var pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        var filteredText = pastedText.replace(/[^0-9,\- ]/g, '');
+        document.execCommand('insertText', false, filteredText);
+      });
+    }
+
+    // Initialize slider toggles
+    var initSliderToggle = function(toggleId) {
+      var toggle = document.getElementById(toggleId);
+      if (!toggle) return;
+
+      var options = toggle.querySelectorAll('.slider-option');
+      var indicator = toggle.querySelector('.slider-indicator');
+
+      var updateIndicator = function(activeOption) {
+        indicator.style.left = activeOption.offsetLeft + 'px';
+        indicator.style.width = activeOption.getBoundingClientRect().width + 'px';
+      };
+
+      options.forEach(function(option) {
+        option.addEventListener('click', function() {
+          options.forEach(function(opt) { opt.classList.remove('active'); });
+          option.classList.add('active');
+          toggle.dataset.value = option.dataset.value;
+          updateIndicator(option);
+          updatePreview();
+        });
+      });
+
+      var activeOption = toggle.querySelector('.slider-option.active');
+      if (activeOption) {
+        setTimeout(function() { updateIndicator(activeOption); }, 0);
+      }
+    };
+
+    initSliderToggle('columnDirection');
+    initSliderToggle('rowDirection');
+
+    // Initial preview
+    updatePreview();
+
+    // Form submission
+    document.getElementById('replicatorForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      var rows = parseInt(document.getElementById('rows').value);
+      var columns = parseInt(document.getElementById('columns').value);
+      var rowDirection = document.getElementById('rowDirection').dataset.value;
+      var columnDirection = document.getElementById('columnDirection').dataset.value;
+      var gapXVal = parseFloat(document.getElementById('gapX').value);
+      var gapYVal = parseFloat(document.getElementById('gapY').value);
+      var sortByTool = document.getElementById('sortByTool').checked;
+      var skipInstancesVal = document.getElementById('skipInstances').value.trim();
+
+      var gapXMm = convertToMetric(gapXVal);
+      var gapYMm = convertToMetric(gapYVal);
+      var outputFilename = getOutputFilename();
+
+      var spacingXMm = partWidth + gapXMm;
+      var spacingYMm = partHeight + gapYMm;
+
+      // Save settings
+      fetch(BASE_URL + '/api/plugins/com.ncsender.replicator/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          replicator: {
+            rows: rows,
+            columns: columns,
+            rowDirection: rowDirection,
+            columnDirection: columnDirection,
+            gapX: gapXMm,
+            gapY: gapYMm,
+            sortByTool: sortByTool,
+            skipInstances: skipInstancesVal
+          }
+        })
+      }).catch(function(err) { console.error('Failed to save settings:', err); });
+
+      // Generate the replicated G-code
+      var replicatedGcode = generateReplicatedGCode(gcodeContent, {
+        rows: rows,
+        columns: columns,
+        rowDirection: rowDirection,
+        columnDirection: columnDirection,
+        spacingX: spacingXMm,
+        spacingY: spacingYMm,
+        gapX: gapXMm,
+        gapY: gapYMm,
+        sortByTool: sortByTool,
+        skipInstances: skipInstancesVal,
+        originalFilename: originalSourceFile
+      });
+
+      // Load the generated G-code temporarily
+      try {
+        var response = await fetch(BASE_URL + '/api/gcode-files/load-temp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: replicatedGcode,
+            filename: outputFilename,
+            sourceFile: originalSourceFile
+          })
+        });
+
+        if (response.ok) {
+          console.log('Replicated G-code generated and loaded:', outputFilename);
+          setTimeout(function() {
+            window.postMessage({ type: 'close-plugin-dialog' }, '*');
+          }, 100);
+        } else {
+          alert('Failed to load G-code');
+        }
+      } catch (error) {
+        console.error('Error loading replicated G-code:', error);
+        alert('Error loading G-code');
+      }
+    });
+  }
+
+  // ---- Initialization: fetch all required data via API ----
+
+  async function init() {
+    try {
+      // Fetch server state, firmware, and settings in parallel
+      var results = await Promise.all([
+        fetch(BASE_URL + '/api/server-state'),
+        fetch(BASE_URL + '/api/firmware'),
+        fetch(BASE_URL + '/api/settings')
+      ]);
+
+      var serverState = await results[0].json();
+      var firmware = await results[1].json();
+      var appSettings = await results[2].json();
+
+      // Check if a file is loaded
+      var jobLoaded = serverState.jobLoaded;
+      var filename = jobLoaded ? jobLoaded.filename : null;
+
+      if (!filename) {
+        showNoFile();
+        return;
+      }
+
+      var originalSourceFile = (jobLoaded && jobLoaded.sourceFile) || filename;
+
+      // Fetch the current gcode content
+      var gcodeResponse = await fetch(BASE_URL + '/api/gcode-files/current/download');
+      if (!gcodeResponse.ok) {
+        showNoFile();
+        return;
+      }
+      var gcodeContent = await gcodeResponse.text();
+
+      // Get machine limits from firmware settings
+      var machineLimits = { x: 400, y: 400 };
+      try {
+        var xMax = parseFloat(firmware.settings && firmware.settings['130'] && firmware.settings['130'].value);
+        var yMax = parseFloat(firmware.settings && firmware.settings['131'] && firmware.settings['131'].value);
+        if (!isNaN(xMax) && xMax > 0) machineLimits.x = xMax;
+        if (!isNaN(yMax) && yMax > 0) machineLimits.y = yMax;
+      } catch (e) {
+        console.warn('Failed to parse firmware settings, using defaults');
+      }
+
+      // Analyze G-code bounds
+      var bounds = analyzeGCodeBounds(gcodeContent);
+
+      // Units
+      var unitsPreference = appSettings.unitsPreference || 'metric';
+      var isImperial = unitsPreference === 'imperial';
+      var distanceUnit = isImperial ? 'in' : 'mm';
+
+      var MM_TO_INCH = 0.0393701;
+      var convertToDisplay = function(value) {
+        return isImperial ? parseFloat((value * MM_TO_INCH).toFixed(3)) : value;
+      };
+
+      var partWidth = bounds.max.x - bounds.min.x;
+      var partHeight = bounds.max.y - bounds.min.y;
+
+      // Get saved settings from initialConfig (passed via template variable)
+      var savedSettings = (initialConfig && initialConfig.replicator) || {};
+
+      var settings = {
+        rows: savedSettings.rows != null ? savedSettings.rows : 1,
+        rowDirection: savedSettings.rowDirection || 'positive',
+        columns: savedSettings.columns != null ? savedSettings.columns : 2,
+        columnDirection: savedSettings.columnDirection || 'positive',
+        gapX: convertToDisplay(savedSettings.gapX != null ? savedSettings.gapX : 5),
+        gapY: convertToDisplay(savedSettings.gapY != null ? savedSettings.gapY : 5),
+        sortByTool: savedSettings.sortByTool != null ? savedSettings.sortByTool : false,
+        skipInstances: savedSettings.skipInstances || ''
+      };
+
+      showReplicatorForm({
+        filename: filename,
+        originalSourceFile: originalSourceFile,
+        gcodeContent: gcodeContent,
+        bounds: bounds,
+        machineLimits: machineLimits,
+        settings: settings,
+        isImperial: isImperial,
+        distanceUnit: distanceUnit,
+        partWidth: partWidth,
+        partHeight: partHeight
+      });
+
+    } catch (error) {
+      console.error('Replicator init error:', error);
+      showError('Failed to load data. Please try again.');
+    }
+  }
+
+  init();
+})();
+</script>

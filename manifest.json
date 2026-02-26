@@ -1,14 +1,23 @@
 {
   "id": "com.ncsender.replicator",
   "name": "Replicator",
-  "version": "0.1.8",
-  "minAppVersion": "0.3.106",
+  "version": "0.1.9",
+  "minAppVersion": "0.3.111",
   "author": "ncSender",
   "description": "Replicate loaded G-code program in a grid pattern",
   "entry": "index.js",
+  "configUi": "config.html",
   "icon": "logo.png",
   "category": "gcode-generator",
   "repository": "https://github.com/siganberg/ncsender-plugin-replicator",
+  "platforms": {
+    "v1": "0.3.106",
+    "pro-v1": "0.3.106",
+    "pro-v2": "2.0.0"
+  },
   "events": [],
-  "permissions": ["gcode.modify"]
+  "permissions": ["gcode.modify"],
+  "toolMenu": [
+    { "id": "open-config", "label": "Replicator", "icon": "logo.png", "clientOnly": true }
+  ]
 }
