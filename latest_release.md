@@ -1,4 +1,4 @@
 ## What's Changed
 
-### Bug Fixes
-- Fixed offset not being applied correctly when using G91 incremental positioning mode
+### :rocket: Improvements
+- Migrated plugin to support the new ncSenderPro V2 platform
