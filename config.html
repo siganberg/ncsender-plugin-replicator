@@ -32,17 +32,347 @@
     margin: 0;
     line-height: 1.5;
   }
-  .replicator-layout {
-    display: grid;
-    grid-template-columns: 320px 280px;
-    gap: 12px;
-    padding: 16px;
-  }
-  .plugin-dialog-footer {
-    padding: 12px 16px;
-    border-top: 1px solid var(--color-border);
+  /* The host's own title bar is hidden: the rail carries the name, the panel
+     owns its padding. Same shell as QuickCut and the Pneumatic ATC, only
+     narrower — there are six inputs here, not six tabs' worth. */
+  .plugin-dialog-header { display: none !important; }
+  .plugin-dialog-content { padding: 0 !important; }
+
+  .rep-wrapper {
+    /* Fixed, like the other plugin dialogs: switching between Grid, Honeycomb
+       and Circular must not resize the window under the operator. Sized to the
+       tallest tab; the panel scrolls rather than the dialog growing. */
+    width: 880px;
+    max-width: 95vw;
+    height: 760px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     background: var(--color-surface);
+    border-radius: var(--radius-medium);
+    overflow: hidden;
+    position: relative;
   }
+  .rep-wrapper *, .rep-wrapper *::before, .rep-wrapper *::after { box-sizing: border-box; }
+  .rep-container {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    border-radius: var(--radius-medium);
+    overflow: hidden;
+  }
+
+  /* ============ Sidebar ============ */
+  .rep-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 190px;
+    border-right: 1px solid var(--color-border);
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--color-surface-muted) 96%, transparent) 0%,
+      var(--color-surface-muted) 100%);
+    padding: 22px 14px 14px;
+  }
+  .rep-sidebar-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 18px; padding: 0 6px; }
+  .rep-sidebar-eyebrow {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+  .rep-sidebar-title { font-size: 1.05rem; font-weight: 650; color: var(--color-text-primary); }
+  .rep-sidebar-unit {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  }
+  .rep-sidebar-nav { display: flex; flex-direction: column; gap: 6px; }
+  .rep-nav-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: var(--color-text-secondary) !important;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
+    width: 100%;
+    text-align: left;
+    line-height: 1.2;
+  }
+  .rep-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
+    flex-shrink: 0;
+  }
+  .rep-nav-icon svg { display: block; width: 18px; height: 18px; }
+  .rep-nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rep-nav-btn.active {
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--color-accent) 16%, transparent) 0%,
+      color-mix(in srgb, var(--color-accent) 8%, transparent) 100%) !important;
+    color: var(--color-text-primary) !important;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+  }
+  .rep-nav-btn.active .rep-nav-icon { color: var(--color-accent); opacity: 1; }
+  .rep-sidebar-footer {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ============ Content ============ */
+  .rep-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--color-surface);
+    border-radius: 0 var(--radius-medium) var(--radius-medium) 0;
+    overflow: hidden;
+  }
+  .rep-panel-header {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .rep-panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .rep-title-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rep-reset { flex: none; }
+  .rep-switch input:disabled { cursor: not-allowed; }
+  .rep-switch input:disabled + .rep-switch-track { opacity: 0.45; }
+  .rep-panel-title { font-size: 1.05rem; font-weight: 700; color: var(--color-text-primary); margin: 0; }
+  .rep-panel-sub { font-size: 0.92rem; color: var(--color-text-secondary); margin: 0; }
+  .rep-panel-sub strong { color: var(--color-text-primary); font-weight: 700; }
+
+  /* The summary belongs in the header for the same reason QuickCut's tool
+     and spindle cards do: it is context for every field below, not a step. */
+  .rep-header-cards { display: block; }
+  .rep-header-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+  .rep-header-card-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0;
+  }
+  /* One row of figures rather than two columns of rows: the numbers are all
+     short, and splitting them left the filename wrapping in a narrow column
+     while the other card sat half empty. */
+  .rep-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .rep-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rep-stat-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+  .rep-stat-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    min-width: 0;
+    word-break: break-word;
+  }
+  .rep-stat-skip { margin-top: 12px; }
+
+  .rep-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 15px 20px 20px;
+  }
+  .rep-panel form { display: flex; flex-direction: column; gap: 16px; }
+  /* One pattern at a time. These must not share .rep-content with the column that
+     holds them: that class is always shown, so reusing it left all three
+     patterns on screen whichever tab was picked. */
+  .rep-pattern { display: none; flex-direction: column; gap: 16px; }
+  .rep-pattern.active { display: flex; }
+  .rep-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .rep-card-title { font-size: 1rem; font-weight: 600; color: var(--color-text-primary); margin: 0; }
+  .rep-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .rep-card-head .slider-toggle { margin: 0; }
+  .rep-row { display: grid; gap: 12px; }
+  .rep-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rep-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rep-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .rep-field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.02em;
+    text-align: left;
+    margin-bottom: 0;
+  }
+  .rep-field input[type="number"],
+  .rep-field input[type="text"] {
+    padding: 9px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    width: 100%;
+  }
+  .rep-field input[type="text"] { text-align: left; }
+  .rep-field select {
+    padding: 9px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  /* The toggle is its own control, so it only has to line up with the labels
+     above it rather than stretch like an input. */
+  .rep-field .slider-toggle { margin: 0; align-self: flex-start; }
+  /* Hints sit flush with their field's label. The old rule indented them
+     26px to clear a checkbox, which left every hint in the card on its own
+     margin. */
+  .rep-card .checkbox-hint,
+  .rep-hint {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+    margin: 0;
+  }
+  .rep-card .checkbox-label { gap: 8px; }
+  .rep-card .checkbox-text { font-size: 0.92rem; font-weight: 600; }
+  .rep-check-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  /* Same switch as QuickCut's coolant toggles: the checkbox stays underneath,
+     invisible, so its id and .checked keep working; the track draws the pill. */
+  .rep-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .rep-switch-text { font-size: 0.92rem; font-weight: 600; color: var(--color-text-primary); }
+  .rep-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; }
+  .rep-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .rep-switch-track {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: 22px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .rep-switch-track::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .rep-switch input:checked + .rep-switch-track {
+    background: var(--color-accent, #0088ff);
+    border-color: var(--color-accent, #0088ff);
+  }
+  .rep-switch input:checked + .rep-switch-track::before {
+    transform: translateX(18px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  .rep-switch input:focus-visible + .rep-switch-track {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #0088ff) 40%, transparent);
+  }
+
+  .rep-panel-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--color-border);
+  }
+  .rep-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 130px;
+    min-height: 44px;
+    padding: 12px 32px;
+    border: none !important;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .rep-btn-primary { background: var(--gradient-accent, var(--color-accent)) !important; color: #fff !important; }
+  .rep-btn-secondary {
+    background: var(--color-surface) !important;
+    color: var(--color-text-primary) !important;
+    box-shadow: inset 0 0 0 1px var(--color-border);
+  }
+  .rep-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .form-card {
     background: var(--color-surface-muted);
     border: 1px solid var(--color-border);
@@ -323,6 +653,24 @@
     return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
   }
 
+  /**
+   * Whether the program is written in inches.
+   *
+   * Everything this plugin measures and places is in millimetres, but a G20
+   * file's coordinates are inches. Without this, an offset worked out in mm was
+   * written into the file as inches: a 0.125" gap became 3.175 inches, and a
+   * 20 mm circle a 20-inch one.
+   */
+  function detectFileInches(gcodeContent) {
+    var lines = gcodeContent.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].replace(/\([^)]*\)/g, '').replace(/;.*/, '').toUpperCase();
+      if (/\bG20\b/.test(t)) return true;
+      if (/\bG21\b/.test(t)) return false;
+    }
+    return false;
+  }
+
   function analyzeGCodeBounds(gcodeContent) {
     var bounds = {
       min: { x: Infinity, y: Infinity, z: Infinity },
@@ -482,6 +830,59 @@
     var distanceUnit = params.distanceUnit;
     var partWidth = params.partWidth;
     var partHeight = params.partHeight;
+    var fileInches = !!params.fileInches;
+
+    // The file on screen may itself be a Replicator or Rotate result. With Reset
+    // to original on (the default) patterns are built from the stored file it
+    // came from, so replicating again never replicates a replica. That also
+    // means an earlier rotation is left out; switch it off to keep it.
+    var currentSource = { content: gcodeContent, name: filename };
+    var originalSource = typeof params.originalContent === 'string'
+      ? { content: params.originalContent, name: originalSourceFile }
+      : null;
+    var resetToOriginal = settings.resetToOriginal !== false;
+    var sourceName = filename;
+
+    // Filled by initSliderToggle; re-measured when a tab becomes visible, since a
+    // hidden toggle has no width to position its indicator against.
+    var sliderRefreshers = [];
+
+    var activeTab = ['grid', 'honeycomb', 'circular'].indexOf(settings.pattern) >= 0 ? settings.pattern : 'grid';
+
+    /** Gap is the space between parts; Distance is origin to origin, QuickCut's term. */
+    function spacingWord(mode) {
+      return mode === 'distance' ? 'Distance' : 'Gap';
+    }
+
+    function baseName(path) {
+      return String(path || '').split(/[\\/]/).pop();
+    }
+
+    /** Point everything that depends on the program at the chosen file. */
+    function useSource() {
+      var src = resetToOriginal && originalSource ? originalSource : currentSource;
+      var measured = analyzeGCodeBounds(src.content);
+      var inches = detectFileInches(src.content);
+      if (inches) {
+        ['min', 'max'].forEach(function(k) {
+          measured[k].x *= 25.4;
+          measured[k].y *= 25.4;
+          measured[k].z *= 25.4;
+        });
+      }
+      gcodeContent = src.content;
+      bounds = measured;
+      fileInches = inches;
+      partWidth = measured.max.x - measured.min.x;
+      partHeight = measured.max.y - measured.min.y;
+      sourceName = src.name;
+    }
+
+    function partSizeText() {
+      return convertToDisplay(partWidth).toFixed(1) + ' x ' + convertToDisplay(partHeight).toFixed(1) + ' ' + distanceUnit;
+    }
+
+    useSource();
 
     var convertToDisplay = function(value) {
       return isImperial ? value / 25.4 : value;
@@ -489,108 +890,234 @@
     var convertToMetric = function(value) {
       return isImperial ? value * 25.4 : value;
     };
+    // 5mm becomes 0.19685039370078738 inches, which is not a thing to put in a
+    // box someone has to read. Trailing zeros go too, so 0.125 stays 0.125.
+    var formatLength = function(value) {
+      var rounded = Number(value).toFixed(isImperial ? 4 : 2);
+      return rounded.indexOf('.') < 0 ? rounded : rounded.replace(/\.?0+$/, '');
+    };
 
     var root = document.getElementById('replicator-root');
     root.innerHTML =
-      '<div class="replicator-layout">' +
-        '<form id="replicatorForm" novalidate>' +
-          '<div class="form-card">' +
-            '<div class="form-card-title">Configuration</div>' +
-            '<div class="form-row">' +
-              '<div class="form-group">' +
-                '<label for="columns">Columns (X)</label>' +
-                '<input type="number" id="columns" min="1" max="50" step="1" value="' + settings.columns + '" required>' +
+      '<div class="rep-wrapper">' +
+        '<div class="rep-container">' +
+          '<aside class="rep-sidebar">' +
+            '<div class="rep-sidebar-header">' +
+              '<span class="rep-sidebar-eyebrow">ncSender</span>' +
+              '<span class="rep-sidebar-title">Replicator</span>' +
+              '<span class="rep-sidebar-unit">' + (isImperial ? 'Imperial (in)' : 'Metric (mm)') + '</span>' +
+            '</div>' +
+            '<nav class="rep-sidebar-nav">' +
+              '<button type="button" class="rep-nav-btn' + (activeTab === 'grid' ? ' active' : '') + '" data-nav="grid">' +
+                '<span class="rep-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>' +
+                '<span class="rep-nav-label">Grid</span>' +
+              '</button>' +
+              '<button type="button" class="rep-nav-btn' + (activeTab === 'honeycomb' ? ' active' : '') + '" data-nav="honeycomb">' +
+                '<span class="rep-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3.5h5L14.5 8 12 12.5H7L4.5 8z"/><path d="M14 11.5h5L21.5 16 19 20.5h-5L11.5 16z"/></svg></span>' +
+                '<span class="rep-nav-label">Honeycomb</span>' +
+              '</button>' +
+              '<button type="button" class="rep-nav-btn' + (activeTab === 'circular' ? ' active' : '') + '" data-nav="circular">' +
+                '<span class="rep-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="4" r="1.6" fill="currentColor"/><circle cx="19" cy="15" r="1.6" fill="currentColor"/><circle cx="5" cy="15" r="1.6" fill="currentColor"/></svg></span>' +
+                '<span class="rep-nav-label">Circular</span>' +
+              '</button>' +
+            '</nav>' +
+            '<div class="rep-sidebar-footer">' +
+              '<button type="button" class="rep-btn rep-btn-secondary" id="rep-cancel-btn">Cancel</button>' +
+            '</div>' +
+          '</aside>' +
+
+          '<section class="rep-content">' +
+            '<header class="rep-panel-header">' +
+              '<div class="rep-panel-title-row">' +
+                '<div class="rep-title-text">' +
+                  '<h2 class="rep-panel-title">Replicator</h2>' +
+                  '<p class="rep-panel-sub">Repeat <strong id="rep-source-name">' + baseName(sourceName) + '</strong> across a pattern.</p>' +
+                '</div>' +
+                '<label class="rep-switch-row rep-reset" for="resetToOriginal" title="' +
+                  (originalSource ? 'Build the pattern from the file this was made from, not from the file on screen' : 'The file on screen is already the original') + '">' +
+                  '<span class="rep-switch-text">Reset to original</span>' +
+                  '<span class="rep-switch">' +
+                    '<input type="checkbox" id="resetToOriginal" ' + (resetToOriginal ? 'checked' : '') + (originalSource ? '' : ' disabled') + '>' +
+                    '<span class="rep-switch-track"></span>' +
+                  '</span>' +
+                '</label>' +
               '</div>' +
-              '<div class="form-group">' +
-                '<label>X Direction</label>' +
-                '<div class="slider-toggle" id="columnDirection" data-value="' + settings.columnDirection + '">' +
-                  '<span class="slider-option ' + (settings.columnDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
-                  '<span class="slider-option ' + (settings.columnDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
-                  '<div class="slider-indicator"></div>' +
+              '<div class="rep-header-cards">' +
+                '<div class="rep-header-card">' +
+                  '<h4 class="rep-header-card-title">Summary</h4>' +
+                  '<div class="rep-stats">' +
+                    '<div class="rep-stat"><span class="rep-stat-label">Part Size</span>' +
+                      '<span class="rep-stat-value" id="rep-part-size">' + partSizeText() + '</span></div>' +
+                    '<div class="rep-stat"><span class="rep-stat-label">Machine Limits</span>' +
+                      '<span class="rep-stat-value">' + convertToDisplay(machineLimits.x).toFixed(0) + ' x ' + convertToDisplay(machineLimits.y).toFixed(0) + ' ' + distanceUnit + '</span></div>' +
+                    '<div class="rep-stat"><span class="rep-stat-label">Replicas</span>' +
+                      '<span class="rep-stat-value" id="totalParts">-</span></div>' +
+                    '<div class="rep-stat"><span class="rep-stat-label">Grid Size</span>' +
+                      '<span class="rep-stat-value" id="gridSize">-</span></div>' +
+                  '</div>' +
+                  '<div class="rep-stat rep-stat-skip" id="skippedRow" style="display: none;"><span class="rep-stat-label">Skipping</span>' +
+                    '<span class="rep-stat-value" id="generatingParts">-</span></div>' +
                 '</div>' +
               '</div>' +
-            '</div>' +
-            '<div class="form-row">' +
-              '<div class="form-group">' +
-                '<label for="rows">Rows (Y)</label>' +
-                '<input type="number" id="rows" min="1" max="50" step="1" value="' + settings.rows + '" required>' +
-              '</div>' +
-              '<div class="form-group">' +
-                '<label>Y Direction</label>' +
-                '<div class="slider-toggle" id="rowDirection" data-value="' + settings.rowDirection + '">' +
-                  '<span class="slider-option ' + (settings.rowDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
-                  '<span class="slider-option ' + (settings.rowDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
-                  '<div class="slider-indicator"></div>' +
+            '</header>' +
+
+            '<div class="rep-panel">' +
+              '<form id="replicatorForm" novalidate>' +
+                '<section class="rep-pattern' + (activeTab === 'grid' ? ' active' : '') + '" data-view="grid">' +
+                  '<div class="rep-card">' +
+                    '<div class="rep-card-head">' +
+                      '<h3 class="rep-card-title">Grid</h3>' +
+                      '<div class="slider-toggle" id="spacingMode" data-value="' + settings.spacingMode + '">' +
+                        '<span class="slider-option ' + (settings.spacingMode === 'distance' ? '' : 'active') + '" data-value="gap">Gap</span>' +
+                        '<span class="slider-option ' + (settings.spacingMode === 'distance' ? 'active' : '') + '" data-value="distance">Distance</span>' +
+                        '<div class="slider-indicator"></div>' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-row rep-row-2">' +
+                      '<div class="rep-field">' +
+                        '<label for="columns">Columns (X)</label>' +
+                        '<input type="number" id="columns" min=\"1\" max=\"50\" step=\"1\" value="' + settings.columns + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="rows">Rows (Y)</label>' +
+                        '<input type="number" id="rows" min=\"1\" max=\"50\" step=\"1\" value="' + settings.rows + '">' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-row rep-row-2">' +
+                      '<div class="rep-field">' +
+                        '<label for="gapX" id="gapX-label">X ' + spacingWord(settings.spacingMode) + ' (' + distanceUnit + ')</label>' +
+                        '<input type="number" id="gapX" min=\"0\" step=\"any\" value="' + formatLength(settings.gapX) + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="gapY" id="gapY-label">Y ' + spacingWord(settings.spacingMode) + ' (' + distanceUnit + ')</label>' +
+                        '<input type="number" id="gapY" min=\"0\" step=\"any\" value="' + formatLength(settings.gapY) + '">' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-row rep-row-2">' +
+                      '<div class="rep-field">' +
+                        '<label>X Direction</label>' +
+                        '<div class="slider-toggle" id="columnDirection" data-value="' + settings.columnDirection + '">' +
+                          '<span class="slider-option ' + (settings.columnDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
+                          '<span class="slider-option ' + (settings.columnDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
+                          '<div class="slider-indicator"></div>' +
+                        '</div>' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label>Y Direction</label>' +
+                        '<div class="slider-toggle" id="rowDirection" data-value="' + settings.rowDirection + '">' +
+                          '<span class="slider-option ' + (settings.rowDirection === 'negative' ? 'active' : '') + '" data-value="negative">\u2212</span>' +
+                          '<span class="slider-option ' + (settings.rowDirection === 'positive' ? 'active' : '') + '" data-value="positive">+</span>' +
+                          '<div class="slider-indicator"></div>' +
+                        '</div>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>' +
+                '</section>' +
+                '<section class="rep-pattern' + (activeTab === 'honeycomb' ? ' active' : '') + '" data-view="honeycomb">' +
+                  '<div class="rep-card">' +
+                    '<div class="rep-card-head">' +
+                      '<h3 class="rep-card-title">Honeycomb</h3>' +
+                      '<div class="slider-toggle" id="hcSpacingMode" data-value="' + settings.hcSpacingMode + '">' +
+                        '<span class="slider-option ' + (settings.hcSpacingMode === 'distance' ? '' : 'active') + '" data-value="gap">Gap</span>' +
+                        '<span class="slider-option ' + (settings.hcSpacingMode === 'distance' ? 'active' : '') + '" data-value="distance">Distance</span>' +
+                        '<div class="slider-indicator"></div>' +
+                      '</div>' +
+                    '</div>' +
+                    '<p class="rep-hint">Every other row is offset by half a step and filled in between the rows you ask for.</p>' +
+                    '<div class="rep-row rep-row-2">' +
+                      '<div class="rep-field">' +
+                        '<label for="hcColumns">Columns (X)</label>' +
+                        '<input type="number" id="hcColumns" min=\"1\" max=\"50\" step=\"1\" value="' + settings.hcColumns + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="hcRows">Rows (Y)</label>' +
+                        '<input type="number" id="hcRows" min=\"1\" max=\"50\" step=\"1\" value="' + settings.hcRows + '">' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-row rep-row-2">' +
+                      '<div class="rep-field">' +
+                        '<label for="hcGapX" id="hcGapX-label">X ' + spacingWord(settings.hcSpacingMode) + ' (' + distanceUnit + ')</label>' +
+                        '<input type="number" id="hcGapX" min=\"0\" step=\"any\" value="' + formatLength(settings.hcGapX) + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="hcGapY" id="hcGapY-label">Y ' + spacingWord(settings.hcSpacingMode) + ' (' + distanceUnit + ')</label>' +
+                        '<input type="number" id="hcGapY" min=\"0\" step=\"any\" value="' + formatLength(settings.hcGapY) + '">' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-check-field">' +
+                      '<label class="rep-switch-row" for="trimEnds">' +
+                        '<span class="rep-switch-text">Symmetric ends</span>' +
+                        '<span class="rep-switch">' +
+                          '<input type="checkbox" id="trimEnds" ' + (settings.trimEnds ? 'checked' : '') + '>' +
+                          '<span class="rep-switch-track"></span>' +
+                        '</span>' +
+                      '</label>' +
+                      '<span class="rep-hint">Offset rows get one fewer part, so both ends of the pattern line up.</span>' +
+                    '</div>' +
+                  '</div>' +
+                '</section>' +
+                '<section class="rep-pattern' + (activeTab === 'circular' ? ' active' : '') + '" data-view="circular">' +
+                  '<div class="rep-card">' +
+                    '<h3 class="rep-card-title">Circular</h3>' +
+                    '<div class="rep-row rep-row-3">' +
+                      '<div class="rep-field">' +
+                        '<label for="circCount">Count</label>' +
+                        '<input type="number" id="circCount" min=\"1\" max=\"200\" step=\"1\" value="' + settings.circCount + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="circRadius">Radius (' + distanceUnit + ')</label>' +
+                        '<input type="number" id="circRadius" min=\"0\" step=\"any\" value="' + formatLength(settings.circRadius) + '">' +
+                      '</div>' +
+                      '<div class="rep-field">' +
+                        '<label for="circStartAngle">Start Angle</label>' +
+                        '<input type="number" id="circStartAngle" step=\"any\" value="' + settings.circStartAngle + '">' +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="rep-field">' +
+                      '<label for="circStyle">Orientation</label>' +
+                      '<select id="circStyle">' +
+                        '<option value="circular"' + (settings.circStyle === 'circular-follow' ? '' : ' selected') + '>Identical</option>' +
+                        '<option value="circular-follow"' + (settings.circStyle === 'circular-follow' ? ' selected' : '') + '>Path Direction</option>' +
+                      '</select>' +
+                      '<span class="rep-hint">Identical keeps every copy square to the machine. Path Direction turns each one to face outward.</span>' +
+                    '</div>' +
+                  '</div>' +
+                '</section>' +
+                '<div class="rep-card">' +
+                  '<h3 class="rep-card-title">Options</h3>' +
+                  '<div class="rep-row rep-row-2">' +
+                    '<div class="rep-check-field">' +
+                      '<label class="rep-switch-row" for="sortByTool">' +
+                        '<span class="rep-switch-text">Sort by Tool</span>' +
+                        '<span class="rep-switch">' +
+                          '<input type="checkbox" id="sortByTool" ' + (settings.sortByTool ? 'checked' : '') + '>' +
+                          '<span class="rep-switch-track"></span>' +
+                        '</span>' +
+                      '</label>' +
+                      '<span class="rep-hint">Reduce tool changes by grouping operations per tool across all replicas</span>' +
+                    '</div>' +
+                    '<div class="rep-field" style="position: relative;">' +
+                      '<label for="skipInstances">Skip Instances</label>' +
+                      '<input type="text" id="skipInstances" placeholder="e.g. 1-4, 7, 9" value="' + settings.skipInstances + '">' +
+                      '<div class="validation-tooltip" id="skipInstances-error"></div>' +
+                      '<span class="rep-hint">Ranges (1-4), individual (5, 7), or combined (1-4, 7, 9)</span>' +
+                    '</div>' +
+                  '</div>' +
                 '</div>' +
-              '</div>' +
+                '<div class="validation-message" id="validationMessage"></div>' +
+              '</form>' +
             '</div>' +
-            '<div class="form-row">' +
-              '<div class="form-group">' +
-                '<label for="gapX">X Gap (' + distanceUnit + ')</label>' +
-                '<input type="number" id="gapX" min="0" step="0.1" value="' + settings.gapX + '" required>' +
-              '</div>' +
-              '<div class="form-group">' +
-                '<label for="gapY">Y Gap (' + distanceUnit + ')</label>' +
-                '<input type="number" id="gapY" min="0" step="0.1" value="' + settings.gapY + '" required>' +
-              '</div>' +
-            '</div>' +
-            '<div class="checkbox-row" style="margin-top: 8px;">' +
-              '<label class="checkbox-label">' +
-                '<input type="checkbox" id="sortByTool" ' + (settings.sortByTool ? 'checked' : '') + '>' +
-                '<span class="checkbox-text">Sort by Tool</span>' +
-              '</label>' +
-              '<span class="checkbox-hint">Reduce tool changes by grouping operations per tool across all replicas</span>' +
-            '</div>' +
-            '<div class="form-group" style="margin-top: 12px; position: relative;">' +
-              '<label for="skipInstances">Skip Instances</label>' +
-              '<input type="text" id="skipInstances" placeholder="e.g. 1-4, 7, 9" value="' + settings.skipInstances + '">' +
-              '<div class="validation-tooltip" id="skipInstances-error"></div>' +
-              '<span class="checkbox-hint" style="margin-left: 0; margin-top: 4px;">Skip specific parts (ranges: 1-4, individual: 5, 7, or combined: 1-4, 7, 9)</span>' +
-            '</div>' +
-          '</div>' +
-        '</form>' +
 
-        '<div class="form-card summary-card">' +
-          '<div class="form-card-title">Summary</div>' +
-          '<div class="summary-grid">' +
-            '<div class="summary-row">' +
-              '<span class="summary-label">Source File:</span>' +
-              '<span class="summary-value">' + filename + '</span>' +
+            '<div class="rep-panel-footer">' +
+              '<button type="button" class="rep-btn rep-btn-primary" id="generateBtn">Generate</button>' +
             '</div>' +
-            '<div class="summary-row">' +
-              '<span class="summary-label">Part Size:</span>' +
-              '<span class="summary-value">' + convertToDisplay(partWidth).toFixed(1) + ' x ' + convertToDisplay(partHeight).toFixed(1) + ' ' + distanceUnit + '</span>' +
-            '</div>' +
-            '<div class="summary-row">' +
-              '<span class="summary-label">Machine Limits:</span>' +
-              '<span class="summary-value">' + convertToDisplay(machineLimits.x).toFixed(0) + ' x ' + convertToDisplay(machineLimits.y).toFixed(0) + ' ' + distanceUnit + '</span>' +
-            '</div>' +
-            '<div class="summary-row">' +
-              '<span class="summary-label">Total Replicas:</span>' +
-              '<span class="summary-value" id="totalParts">-</span>' +
-            '</div>' +
-            '<div class="summary-row" id="skippedRow" style="display: none;">' +
-              '<span class="summary-label">Skipping:</span>' +
-              '<span class="summary-value" id="generatingParts">-</span>' +
-            '</div>' +
-            '<div class="summary-row">' +
-              '<span class="summary-label">Grid Size:</span>' +
-              '<span class="summary-value" id="gridSize">-</span>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="validation-message" id="validationMessage"></div>' +
-      '</div>' +
-
-      '<div class="plugin-dialog-footer">' +
-        '<div class="button-group">' +
-          '<button type="button" class="btn btn-secondary" id="rep-cancel-btn">Cancel</button>' +
-          '<button type="button" class="btn btn-primary" id="generateBtn">Generate</button>' +
+          '</section>' +
         '</div>' +
       '</div>';
 
     document.getElementById('rep-cancel-btn').addEventListener('click', function() {
+      // A change made just before closing is still waiting out its debounce.
+      if (saveTimer) saveSettingsNow();
       window.postMessage({ type: 'close-plugin-dialog' }, '*');
     });
     document.getElementById('generateBtn').addEventListener('click', function() {
@@ -682,17 +1209,67 @@
 
     // ---- Preview update ----
 
+    /** Which tab is showing, and everything that tab's fields say. */
+    function activePattern() {
+      var btn = document.querySelector('.rep-nav-btn.active');
+      return (btn && btn.getAttribute('data-nav')) || 'grid';
+    }
+
+    function numValue(id, fallback) {
+      var el = document.getElementById(id);
+      if (!el) return fallback;
+      var v = parseFloat(el.value);
+      return isFinite(v) ? v : fallback;
+    }
+
+    function readPatternInputs() {
+      var tab = activePattern();
+
+      if (tab === 'circular') {
+        var style = (document.getElementById('circStyle') || {}).value || 'circular';
+        var count = Math.max(1, Math.round(numValue('circCount', 1)));
+        return {
+          tab: tab,
+          style: style,
+          label: (style === 'circular-follow' ? 'Circular, path direction' : 'Circular') +
+                 ' - ' + count + ' around ' + numValue('circRadius', 0) + distanceUnit,
+          count: count,
+          radius: convertToMetric(numValue('circRadius', 0)),
+          startAngle: numValue('circStartAngle', 0)
+        };
+      }
+
+      var isHoney = tab === 'honeycomb';
+      var rows = Math.max(1, Math.round(numValue(isHoney ? 'hcRows' : 'rows', 1)));
+      var columns = Math.max(1, Math.round(numValue(isHoney ? 'hcColumns' : 'columns', 1)));
+      var modeEl = document.getElementById(isHoney ? 'hcSpacingMode' : 'spacingMode');
+      var byDistance = !!(modeEl && modeEl.dataset.value === 'distance');
+      var xMm = convertToMetric(numValue(isHoney ? 'hcGapX' : 'gapX', 0));
+      var yMm = convertToMetric(numValue(isHoney ? 'hcGapY' : 'gapY', 0));
+      var trimEl = document.getElementById('trimEnds');
+
+      return {
+        tab: tab,
+        style: isHoney ? 'honeycomb' : 'linear',
+        label: (isHoney ? 'Honeycomb' : 'Grid') + ' - ' + columns + ' x ' + rows,
+        rows: rows,
+        columns: columns,
+        // Distance is the step itself; a gap is added to the part it follows.
+        spacingX: byDistance ? xMm : partWidth + xMm,
+        spacingY: byDistance ? yMm : partHeight + yMm,
+        rowDirection: (document.getElementById('rowDirection') || {}).dataset ?
+          document.getElementById('rowDirection').dataset.value : 'positive',
+        columnDirection: (document.getElementById('columnDirection') || {}).dataset ?
+          document.getElementById('columnDirection').dataset.value : 'positive',
+        trimEnds: isHoney && trimEl ? trimEl.checked : false
+      };
+    }
+
     function updatePreview() {
-      var rows = parseInt(document.getElementById('rows').value) || 1;
-      var columns = parseInt(document.getElementById('columns').value) || 1;
-      var gapX = parseFloat(document.getElementById('gapX').value) || 0;
-      var gapY = parseFloat(document.getElementById('gapY').value) || 0;
+      var patternInputs = readPatternInputs();
       var skipInput = document.getElementById('skipInstances').value || '';
-
-      var gapXMm = convertToMetric(gapX);
-      var gapYMm = convertToMetric(gapY);
-
-      var totalParts = rows * columns;
+      var extent = computePatternExtent(patternInputs, partWidth, partHeight);
+      var totalParts = extent.count;
 
       // Validate skip instances
       var skipError = validateSkipInstances(skipInput, totalParts);
@@ -713,8 +1290,8 @@
       var skipSet = skipError ? new Set() : parseSkipInstances(skipInput, totalParts);
       var generatingCount = totalParts - skipSet.size;
 
-      var gridWidthMm = columns * partWidth + (columns - 1) * gapXMm;
-      var gridHeightMm = rows * partHeight + (rows - 1) * gapYMm;
+      var gridWidthMm = extent.width;
+      var gridHeightMm = extent.height;
 
       var skippedRow = document.getElementById('skippedRow');
       if (skipSet.size > 0 && !skipError) {
@@ -741,7 +1318,8 @@
           'Machine: ' + convertToDisplay(machineLimits.x).toFixed(0) + ' x ' + convertToDisplay(machineLimits.y).toFixed(0) + ' ' + distanceUnit;
         validationMsg.classList.add('show');
         generateBtn.disabled = true;
-      } else if (gapXMm < 0 || gapYMm < 0) {
+      } else if ((patternInputs.spacingX != null && patternInputs.spacingX < partWidth) ||
+                 (patternInputs.spacingY != null && patternInputs.spacingY < partHeight)) {
         validationMsg.textContent = 'Warning: Negative gap will cause parts to overlap.';
         validationMsg.classList.add('show');
         generateBtn.disabled = false;
@@ -751,10 +1329,214 @@
       }
     }
 
+    // ---- Pattern geometry ----
+
+    /**
+     * Where each copy goes: an offset from the original part, plus a rotation.
+     *
+     * Mirrors QuickCut's patterns so the two plugins mean the same thing by
+     * Honeycomb and the two Circular styles:
+     *  - honeycomb inserts a shifted row between each pair of primary rows, so
+     *    "3 rows" means 3 primary rows with alternates filling in between;
+     *    trimEnds drops one item from the shifted rows so the ends line up.
+     *  - circular spaces copies evenly around a circle; 'circular-follow' also
+     *    turns each one to face outward, the only style that needs rotation.
+     */
+    function computePatternPositions(opts) {
+      var positions = [];
+      var style = opts.style;
+
+      if (style === 'circular' || style === 'circular-follow') {
+        var count = Math.max(1, Math.floor(opts.count || 1));
+        var step = 360 / count;
+        var follow = style === 'circular-follow';
+        for (var k = 0; k < count; k++) {
+          var deg = (opts.startAngle || 0) + step * k;
+          var rad = deg * Math.PI / 180;
+          positions.push({
+            offsetX: (opts.radius || 0) * Math.cos(rad),
+            offsetY: (opts.radius || 0) * Math.sin(rad),
+            rotDeg: follow ? deg : 0,
+            row: 1,
+            col: k + 1
+          });
+        }
+        return positions;
+      }
+
+      var rows = Math.max(1, Math.floor(opts.rows || 1));
+      var columns = Math.max(1, Math.floor(opts.columns || 1));
+      var sx = opts.spacingX * (opts.columnDirection === 'positive' ? 1 : -1);
+      var sy = opts.spacingY * (opts.rowDirection === 'positive' ? 1 : -1);
+
+      if (style === 'honeycomb') {
+        for (var r = 0; r < rows; r++) {
+          for (var c = 0; c < columns; c++) {
+            positions.push({ offsetX: c * sx, offsetY: r * sy, rotDeg: 0, row: r + 1, col: c + 1 });
+          }
+          if (r < rows - 1) {
+            var shifted = opts.trimEnds ? Math.max(0, columns - 1) : columns;
+            for (var h = 0; h < shifted; h++) {
+              positions.push({
+                offsetX: h * sx + sx / 2,
+                offsetY: r * sy + sy / 2,
+                rotDeg: 0,
+                row: r + 1,
+                col: h + 1
+              });
+            }
+          }
+        }
+        return positions;
+      }
+
+      for (var rr = 0; rr < rows; rr++) {
+        for (var cc = 0; cc < columns; cc++) {
+          positions.push({ offsetX: cc * sx, offsetY: rr * sy, rotDeg: 0, row: rr + 1, col: cc + 1 });
+        }
+      }
+      return positions;
+    }
+
+    /** The footprint of the whole pattern, for the summary and the limit check. */
+    function computePatternExtent(opts, partWidth, partHeight) {
+      var positions = computePatternPositions(opts);
+      if (positions.length === 0) return { width: 0, height: 0, count: 0 };
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (var i = 0; i < positions.length; i++) {
+        var pos = positions[i];
+        // A part turned to face the circle sweeps its diagonal, so its
+        // footprint is taken from that rather than from its width.
+        var span = Math.sqrt(partWidth * partWidth + partHeight * partHeight);
+        var w = pos.rotDeg ? span : partWidth;
+        var h = pos.rotDeg ? span : partHeight;
+        if (pos.offsetX < minX) minX = pos.offsetX;
+        if (pos.offsetX + w > maxX) maxX = pos.offsetX + w;
+        if (pos.offsetY < minY) minY = pos.offsetY;
+        if (pos.offsetY + h > maxY) maxY = pos.offsetY + h;
+      }
+      return { width: maxX - minX, height: maxY - minY, count: positions.length };
+    }
+
     // ---- G-code generation functions ----
 
-    function createOffsetFn(offsetX, offsetY) {
+    // Carried across lines so a rotated move that names only one axis can still
+    // be written out with both.
+    var lastX = 0;
+    var lastY = 0;
+
+    /** Chord tolerance for arcs that must be written as straight moves, in mm. */
+    var arcToleranceMm = 0.002;
+
+    /**
+     * Per-instance transform: turn about the part's own origin, then shift.
+     *
+     * Rotation is only ever non-zero for Circular (Path Direction). XY arcs stay
+     * arcs: their I/J centre offsets turn as a vector, and G2/G3 is unchanged
+     * because a turn about Z keeps the sense of the arc.
+     *
+     * An XZ or YZ arc (G18/G19) turned by an arbitrary angle lies in a slanted
+     * plane that no G-code plane word can name, so it is written out as straight
+     * G1 moves instead. The machine cannot tell: grblHAL never cuts a true arc,
+     * it splits every G2/G3 into segments using its own arc tolerance ($12,
+     * 0.002 mm by default), and this uses the same figure and the same formula.
+     */
+    function createOffsetFn(offsetX, offsetY, rotationDeg) {
       var isAbsolute = true;
+      // Offsets arrive in mm; the lines being moved are in the file's units.
+      if (fileInches) {
+        offsetX = offsetX / 25.4;
+        offsetY = offsetY / 25.4;
+      }
+      lastX = 0;
+      lastY = 0;
+      var lastZ = 0;
+      var inches = fileInches;
+      var rot = rotationDeg || 0;
+      var rad = rot * Math.PI / 180;
+      var cos = Math.cos(rad);
+      var sin = Math.sin(rad);
+      var plane = 'G17';
+      var motion = null;
+      // The motion mode the controller is really in. Once an arc has gone out
+      // as G1 moves it differs from the file's, so a later line that leans on
+      // the modal mode has to say it out loud.
+      var sentMotion = null;
+
+      function fmt(v) { return v.toFixed(inches ? 4 : 3); }
+
+      function place(x, y) {
+        return { x: x * cos - y * sin + offsetX, y: x * sin + y * cos + offsetY };
+      }
+
+      var AXES = { G17: ['x', 'y', 'z'], G18: ['z', 'x', 'y'], G19: ['y', 'z', 'x'] };
+
+      function linearize(line, trimmed, planeWordText, start, end) {
+        var ax = AXES[plane];
+        var a = ax[0], b = ax[1], h = ax[2];
+        var cw = motion === 2;
+        var centre = { x: start.x, y: start.y, z: start.z };
+        var iM = line.match(/I([+-]?\d*\.?\d+)/i);
+        var jM = line.match(/J([+-]?\d*\.?\d+)/i);
+        var kM = line.match(/K([+-]?\d*\.?\d+)/i);
+        var rM = line.match(/R([+-]?\d*\.?\d+)/i);
+
+        if (iM || jM || kM) {
+          centre.x += iM ? parseFloat(iM[1]) : 0;
+          centre.y += jM ? parseFloat(jM[1]) : 0;
+          centre.z += kM ? parseFloat(kM[1]) : 0;
+        } else if (rM) {
+          var rSigned = parseFloat(rM[1]);
+          var da = end[a] - start[a], db = end[b] - start[b];
+          var chord = Math.sqrt(da * da + db * db);
+          if (chord < 1e-9) return null;
+          var rr = Math.abs(rSigned);
+          var hh = Math.sqrt(Math.max(0, rr * rr - (chord / 2) * (chord / 2)));
+          // Short arc (R > 0) or long arc (R < 0), on the side the direction implies.
+          var side = (cw !== (rSigned < 0)) ? -1 : 1;
+          centre[a] = (start[a] + end[a]) / 2 + side * hh * (-db / chord);
+          centre[b] = (start[b] + end[b]) / 2 + side * hh * (da / chord);
+        } else {
+          return null;
+        }
+
+        var radius = Math.sqrt(Math.pow(start[a] - centre[a], 2) + Math.pow(start[b] - centre[b], 2));
+        var sa = Math.atan2(start[b] - centre[b], start[a] - centre[a]);
+        var ea = Math.atan2(end[b] - centre[b], end[a] - centre[a]);
+        var sweep = ea - sa;
+        // Same rule grblHAL applies: a clockwise arc always travels negative.
+        if (cw) { if (sweep >= -1e-9) sweep -= 2 * Math.PI; }
+        else { if (sweep <= 1e-9) sweep += 2 * Math.PI; }
+
+        var tol = inches ? arcToleranceMm / 25.4 : arcToleranceMm;
+        var segLen = radius > tol ? 2 * Math.sqrt(tol * (2 * radius - tol)) : Math.max(radius, tol);
+        var count = Math.max(1, Math.ceil(Math.abs(sweep) * radius / segLen));
+
+        var fM = line.match(/F([+-]?\d*\.?\d+)/i);
+        var indent = (line.match(/^\s*/) || [''])[0];
+        var out = [];
+        for (var n = 1; n <= count; n++) {
+          var pt;
+          if (n === count) {
+            pt = { x: end.x, y: end.y, z: end.z };
+          } else {
+            var t = n / count;
+            var ang = sa + sweep * t;
+            pt = {};
+            pt[a] = centre[a] + radius * Math.cos(ang);
+            pt[b] = centre[b] + radius * Math.sin(ang);
+            pt[h] = start[h] + (end[h] - start[h]) * t;
+          }
+          var q = place(pt.x, pt.y);
+          var words = 'G1 X' + fmt(q.x) + ' Y' + fmt(q.y) + ' Z' + fmt(pt.z);
+          // The plane word is kept so the controller's plane is what the file
+          // expects afterwards, and the feed rides on the first move.
+          if (n === 1) words = (planeWordText ? planeWordText + ' ' : '') + words + (fM ? ' F' + fM[1] : '');
+          out.push(indent + words);
+        }
+        sentMotion = 1;
+        return out.join('\n');
+      }
 
       return function(line) {
         var trimmed = line.trim().toUpperCase();
@@ -765,26 +1547,92 @@
 
         if (trimmed.indexOf('G90') !== -1 && trimmed.indexOf('G90.1') === -1) isAbsolute = true;
         if (trimmed.indexOf('G91') !== -1 && trimmed.indexOf('G91.1') === -1) isAbsolute = false;
+        if (/\bG20\b/.test(trimmed)) inches = true;
+        if (/\bG21\b/.test(trimmed)) inches = false;
 
-        if (trimmed.indexOf('X') === -1 && trimmed.indexOf('Y') === -1) {
-          return line;
+        var planeWord = trimmed.match(/\bG1([789])\b/);
+        if (planeWord) plane = 'G1' + planeWord[1];
+        var motionWord = trimmed.match(/\bG0*([0123])\b/);
+        if (motionWord) motion = Number(motionWord[1]);
+
+        // ---- Plain shift: byte-for-byte what this did before rotation existed ----
+        if (!rot) {
+          if (trimmed.indexOf('X') === -1 && trimmed.indexOf('Y') === -1) {
+            return line;
+          }
+          if (!isAbsolute) {
+            return line;
+          }
+          // Three decimals of a millimetre, four of an inch.
+          var places = fileInches ? 4 : 3;
+          var shifted = line.replace(/X([+-]?\d*\.?\d+)/gi, function(match, value) {
+            return 'X' + (parseFloat(value) + offsetX).toFixed(places);
+          });
+          return shifted.replace(/Y([+-]?\d*\.?\d+)/gi, function(match, value) {
+            return 'Y' + (parseFloat(value) + offsetY).toFixed(places);
+          });
         }
 
+        // ---- Turned copy ----
         if (!isAbsolute) {
           return line;
         }
 
+        var xMatch = line.match(/X([+-]?\d*\.?\d+)/i);
+        var yMatch = line.match(/Y([+-]?\d*\.?\d+)/i);
+        var zMatch = line.match(/Z([+-]?\d*\.?\d+)/i);
+        var start = { x: lastX, y: lastY, z: lastZ };
+        var end = {
+          x: xMatch ? parseFloat(xMatch[1]) : lastX,
+          y: yMatch ? parseFloat(yMatch[1]) : lastY,
+          z: zMatch ? parseFloat(zMatch[1]) : lastZ
+        };
+        lastX = end.x;
+        lastY = end.y;
+        lastZ = end.z;
+
+        var isArc = motion === 2 || motion === 3;
+        if (isArc && plane !== 'G17' && (xMatch || yMatch || zMatch)) {
+          var segments = linearize(line, trimmed, planeWord ? planeWord[0] : '', start, end);
+          if (segments !== null) return segments;
+        }
+
         var result = line;
 
-        result = result.replace(/X([+-]?\d*\.?\d+)/gi, function(match, value) {
-          var newValue = parseFloat(value) + offsetX;
-          return 'X' + newValue.toFixed(3);
-        });
+        if (xMatch || yMatch) {
+          var q = place(end.x, end.y);
+          if (xMatch && yMatch) {
+            result = result.replace(/X([+-]?\d*\.?\d+)/i, 'X' + fmt(q.x)).replace(/Y([+-]?\d*\.?\d+)/i, 'Y' + fmt(q.y));
+          } else if (xMatch) {
+            // A turned move that named one axis now moves in both.
+            result = result.replace(/X([+-]?\d*\.?\d+)/i, 'X' + fmt(q.x) + ' Y' + fmt(q.y));
+          } else {
+            result = result.replace(/Y([+-]?\d*\.?\d+)/i, 'X' + fmt(q.x) + ' Y' + fmt(q.y));
+          }
+        }
 
-        result = result.replace(/Y([+-]?\d*\.?\d+)/gi, function(match, value) {
-          var newValue = parseFloat(value) + offsetY;
-          return 'Y' + newValue.toFixed(3);
-        });
+        if (isArc && plane === 'G17') {
+          var iM = line.match(/I([+-]?\d*\.?\d+)/i);
+          var jM = line.match(/J([+-]?\d*\.?\d+)/i);
+          if (iM || jM) {
+            var i0 = iM ? parseFloat(iM[1]) : 0;
+            var j0 = jM ? parseFloat(jM[1]) : 0;
+            var ri = i0 * cos - j0 * sin;
+            var rj = i0 * sin + j0 * cos;
+            result = result.replace(/\s*I[+-]?\d*\.?\d+/i, '').replace(/\s*J[+-]?\d*\.?\d+/i, '');
+            var anchor = result.match(/Y[+-]?\d*\.?\d+/i) || result.match(/X[+-]?\d*\.?\d+/i);
+            var ij = ' I' + fmt(ri) + ' J' + fmt(rj);
+            result = anchor ? result.replace(anchor[0], anchor[0] + ij) : result.replace(/\s*$/, ij);
+          }
+        }
+
+        // A modal line after arc moves went out as G1 would otherwise run in G1.
+        var moves = xMatch || yMatch || zMatch || /[IJKR][+-]?\d/i.test(trimmed);
+        if (!motionWord && motion !== null && motion !== sentMotion && moves) {
+          var ind = (result.match(/^\s*/) || [''])[0];
+          result = ind + 'G' + motion + ' ' + result.trim();
+        }
+        if (motion !== null && (motionWord || moves)) sentMotion = motion;
 
         return result;
       };
@@ -910,7 +1758,7 @@
 
       var xMultiplier = columnDirection === 'positive' ? 1 : -1;
       var yMultiplier = rowDirection === 'positive' ? 1 : -1;
-      var totalParts = rows * columns;
+      var totalParts = options.totalParts;
 
       var output = [];
 
@@ -918,7 +1766,7 @@
 
       output.push('(Replicated G-code generated by Replicator Plugin)');
       output.push('(Source: ' + origFilename + ')');
-      output.push('(Grid: ' + columns + ' columns x ' + rows + ' rows = ' + totalParts + ' parts)');
+      output.push('(Pattern: ' + options.patternLabel + ' - ' + totalParts + ' parts)');
       if (skipSet.size > 0) {
         output.push('(Skipped instances: ' + Array.from(skipSet).sort(function(a, b) { return a - b; }).join(', ') + ')');
         output.push('(Generating: ' + (totalParts - skipSet.size) + ' parts)');
@@ -928,19 +1776,27 @@
       output.push('(Sort by Tool: ' + (sortByTool ? 'Yes' : 'No') + ')');
       output.push('');
 
+      var allPositions = computePatternPositions({
+        style: options.patternStyle,
+        rows: rows,
+        columns: columns,
+        spacingX: spacingX,
+        spacingY: spacingY,
+        rowDirection: rowDirection,
+        columnDirection: columnDirection,
+        trimEnds: options.trimEnds,
+        count: options.count,
+        radius: options.radius,
+        startAngle: options.startAngle
+      });
+
       var positions = [];
-      for (var row = 0; row < rows; row++) {
-        for (var col = 0; col < columns; col++) {
-          var partNum = row * columns + col + 1;
-          if (skipSet.has(partNum)) continue;
-          positions.push({
-            partNum: partNum,
-            row: row + 1,
-            col: col + 1,
-            offsetX: col * spacingX * xMultiplier,
-            offsetY: row * spacingY * yMultiplier
-          });
-        }
+      for (var pi = 0; pi < allPositions.length; pi++) {
+        var partNum = pi + 1;
+        if (skipSet.has(partNum)) continue;
+        var placed = allPositions[pi];
+        placed.partNum = partNum;
+        positions.push(placed);
       }
 
       if (sortByTool) {
@@ -1003,7 +1859,7 @@
 
             processLinesWithCommentRepositioning(
               cutting,
-              createOffsetFn(pos.offsetX, pos.offsetY),
+              createOffsetFn(pos.offsetX, pos.offsetY, pos.rotDeg),
               !isLast,
               output
             );
@@ -1052,7 +1908,7 @@
 
               processLinesWithCommentRepositioning(
                 allLinesForTool,
-                createOffsetFn(pos.offsetX, pos.offsetY),
+                createOffsetFn(pos.offsetX, pos.offsetY, pos.rotDeg),
                 !isLast,
                 output
               );
@@ -1115,7 +1971,7 @@
             output.push('(Part ' + pos.partNum + ' of ' + totalParts + ' - Row ' + pos.row + ', Col ' + pos.col + ')');
             output.push('(Offset: X=' + pos.offsetX.toFixed(3) + ', Y=' + pos.offsetY.toFixed(3) + ')');
 
-            var offsetFn = createOffsetFn(pos.offsetX, pos.offsetY);
+            var offsetFn = createOffsetFn(pos.offsetX, pos.offsetY, pos.rotDeg);
             for (var ci = 0; ci < cutting.length; ci++) {
               if (!isLast && isSpindleStopCommand(cutting[ci])) {
                 continue;
@@ -1156,7 +2012,7 @@
 
               processLinesWithCommentRepositioning(
                 seg.lines,
-                createOffsetFn(pos.offsetX, pos.offsetY),
+                createOffsetFn(pos.offsetX, pos.offsetY, pos.rotDeg),
                 !(isLastPosition && isLastSegment),
                 output
               );
@@ -1173,15 +2029,53 @@
 
     // ---- Event listeners ----
 
-    ['rows', 'columns', 'gapX', 'gapY', 'skipInstances'].forEach(function(id) {
+    Array.prototype.forEach.call(document.querySelectorAll('.rep-nav-btn'), function(btn) {
+      btn.addEventListener('click', function() {
+        var target = btn.getAttribute('data-nav');
+        Array.prototype.forEach.call(document.querySelectorAll('.rep-nav-btn'), function(b) {
+          b.classList.toggle('active', b === btn);
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.rep-pattern'), function(panel) {
+          panel.classList.toggle('active', panel.getAttribute('data-view') === target);
+        });
+        // A different pattern means a different part count, so the skip list
+        // stops meaning what it did.
+        document.getElementById('skipInstances').value = '';
+        setTimeout(function() { sliderRefreshers.forEach(function(f) { f(); }); }, 0);
+        updatePreview();
+        scheduleSave();
+      });
+    });
+
+    var sortEl = document.getElementById('sortByTool');
+    if (sortEl) sortEl.addEventListener('change', scheduleSave);
+
+    var resetEl = document.getElementById('resetToOriginal');
+    if (resetEl) {
+      resetEl.addEventListener('change', function() {
+        resetToOriginal = resetEl.checked;
+        useSource();
+        document.getElementById('rep-source-name').textContent = baseName(sourceName);
+        document.getElementById('rep-part-size').textContent = partSizeText();
+        updatePreview();
+        scheduleSave();
+      });
+    }
+
+    ['rows', 'columns', 'gapX', 'gapY', 'skipInstances',
+     'hcRows', 'hcColumns', 'hcGapX', 'hcGapY', 'trimEnds',
+     'circCount', 'circRadius', 'circStartAngle', 'circStyle'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener('input', updatePreview);
         el.addEventListener('change', updatePreview);
+        // Save when the operator is done with a field - it loses focus with a new
+        // value - not on every keystroke. The preview above still follows typing.
+        el.addEventListener('change', scheduleSave);
       }
     });
 
-    ['rows', 'columns'].forEach(function(id) {
+    ['rows', 'columns', 'hcRows', 'hcColumns', 'circCount'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener('change', function() {
@@ -1207,8 +2101,63 @@
       });
     }
 
+    // ---- Persistence ----
+
+    /** Everything the dialog remembers, read from every tab's own fields. */
+    function collectSettings() {
+      var dir = function(id) {
+        var el = document.getElementById(id);
+        return el && el.dataset.value ? el.dataset.value : 'positive';
+      };
+      var mode = function(id) {
+        var el = document.getElementById(id);
+        return el && el.dataset.value === 'distance' ? 'distance' : 'gap';
+      };
+      return {
+        pattern: activePattern(),
+        rows: numValue('rows', 1),
+        columns: numValue('columns', 1),
+        rowDirection: dir('rowDirection'),
+        columnDirection: dir('columnDirection'),
+        gapX: convertToMetric(numValue('gapX', 0)),
+        gapY: convertToMetric(numValue('gapY', 0)),
+        spacingMode: mode('spacingMode'),
+        hcRows: numValue('hcRows', 3),
+        hcColumns: numValue('hcColumns', 3),
+        hcGapX: convertToMetric(numValue('hcGapX', 0)),
+        hcGapY: convertToMetric(numValue('hcGapY', 0)),
+        hcSpacingMode: mode('hcSpacingMode'),
+        trimEnds: document.getElementById('trimEnds').checked,
+        circCount: numValue('circCount', 6),
+        circRadius: convertToMetric(numValue('circRadius', 0)),
+        circStartAngle: numValue('circStartAngle', 0),
+        circStyle: document.getElementById('circStyle').value,
+        sortByTool: document.getElementById('sortByTool').checked,
+        skipInstances: document.getElementById('skipInstances').value.trim(),
+        resetToOriginal: resetToOriginal
+      };
+    }
+
+    // Saved as the operator works rather than only on Generate, which lost every
+    // change made before closing the dialog. Debounced so typing a number sends
+    // one save, not one per keystroke.
+    var saveTimer = null;
+    function saveSettingsNow() {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      fetch(BASE_URL + '/api/plugins/com.ncsender.replicator/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replicator: collectSettings() })
+      }).catch(function(err) { console.error('Failed to save settings:', err); });
+    }
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveSettingsNow, 400);
+    }
+
     // Initialize slider toggles
-    var initSliderToggle = function(toggleId) {
+    var initSliderToggle = function(toggleId, onChange) {
       var toggle = document.getElementById(toggleId);
       if (!toggle) return;
 
@@ -1222,22 +2171,39 @@
 
       options.forEach(function(option) {
         option.addEventListener('click', function() {
+          var previous = toggle.dataset.value;
           options.forEach(function(opt) { opt.classList.remove('active'); });
           option.classList.add('active');
           toggle.dataset.value = option.dataset.value;
           updateIndicator(option);
+          if (onChange && previous !== option.dataset.value) onChange(option.dataset.value);
           updatePreview();
+          scheduleSave();
         });
       });
 
-      var activeOption = toggle.querySelector('.slider-option.active');
-      if (activeOption) {
-        setTimeout(function() { updateIndicator(activeOption); }, 0);
-      }
+      var refresh = function() {
+        var current = toggle.querySelector('.slider-option.active');
+        if (current && toggle.offsetParent !== null) updateIndicator(current);
+      };
+      sliderRefreshers.push(refresh);
+      setTimeout(refresh, 0);
     };
+
+    // Flipping Gap and Distance converts the numbers too, so the pattern stays
+    // exactly where it was and only the way it is described changes.
+    function convertSpacing(xId, yId, next) {
+      var sign = next === 'distance' ? 1 : -1;
+      document.getElementById(xId).value = formatLength(numValue(xId, 0) + sign * convertToDisplay(partWidth));
+      document.getElementById(yId).value = formatLength(numValue(yId, 0) + sign * convertToDisplay(partHeight));
+      document.getElementById(xId + '-label').textContent = 'X ' + spacingWord(next) + ' (' + distanceUnit + ')';
+      document.getElementById(yId + '-label').textContent = 'Y ' + spacingWord(next) + ' (' + distanceUnit + ')';
+    }
 
     initSliderToggle('columnDirection');
     initSliderToggle('rowDirection');
+    initSliderToggle('spacingMode', function(next) { convertSpacing('gapX', 'gapY', next); });
+    initSliderToggle('hcSpacingMode', function(next) { convertSpacing('hcGapX', 'hcGapY', next); });
 
     // Initial preview
     updatePreview();
@@ -1246,39 +2212,29 @@
     document.getElementById('replicatorForm').addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      var rows = parseInt(document.getElementById('rows').value);
-      var columns = parseInt(document.getElementById('columns').value);
-      var rowDirection = document.getElementById('rowDirection').dataset.value;
-      var columnDirection = document.getElementById('columnDirection').dataset.value;
-      var gapXVal = parseFloat(document.getElementById('gapX').value);
-      var gapYVal = parseFloat(document.getElementById('gapY').value);
+      var patternInputs = readPatternInputs();
       var sortByTool = document.getElementById('sortByTool').checked;
       var skipInstancesVal = document.getElementById('skipInstances').value.trim();
-
-      var gapXMm = convertToMetric(gapXVal);
-      var gapYMm = convertToMetric(gapYVal);
       var outputFilename = getOutputFilename();
 
-      var spacingXMm = partWidth + gapXMm;
-      var spacingYMm = partHeight + gapYMm;
+      var rows = patternInputs.rows || 1;
+      var columns = patternInputs.columns || 1;
+      var rowDirection = patternInputs.rowDirection || 'positive';
+      var columnDirection = patternInputs.columnDirection || 'positive';
+      var spacingXMm = patternInputs.spacingX || 0;
+      var spacingYMm = patternInputs.spacingY || 0;
+      var gapXMm = spacingXMm ? spacingXMm - partWidth : 0;
+      var gapYMm = spacingYMm ? spacingYMm - partHeight : 0;
 
-      // Save settings
-      fetch(BASE_URL + '/api/plugins/com.ncsender.replicator/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          replicator: {
-            rows: rows,
-            columns: columns,
-            rowDirection: rowDirection,
-            columnDirection: columnDirection,
-            gapX: gapXMm,
-            gapY: gapYMm,
-            sortByTool: sortByTool,
-            skipInstances: skipInstancesVal
-          }
-        })
-      }).catch(function(err) { console.error('Failed to save settings:', err); });
+      var patternStyle = patternInputs.style;
+      var patternLabel = patternInputs.label;
+      var trimEnds = !!patternInputs.trimEnds;
+      var circularCount = patternInputs.count;
+      var circularRadius = patternInputs.radius;
+      var circularStartAngle = patternInputs.startAngle;
+      var patternCount = computePatternExtent(patternInputs, partWidth, partHeight).count;
+
+      saveSettingsNow();
 
       // Generate the replicated G-code
       var replicatedGcode = generateReplicatedGCode(gcodeContent, {
@@ -1292,7 +2248,14 @@
         gapY: gapYMm,
         sortByTool: sortByTool,
         skipInstances: skipInstancesVal,
-        originalFilename: originalSourceFile
+        originalFilename: originalSourceFile,
+        patternStyle: patternStyle,
+        patternLabel: patternLabel,
+        totalParts: patternCount,
+        trimEnds: trimEnds,
+        count: circularCount,
+        radius: circularRadius,
+        startAngle: circularStartAngle
       });
 
       // Load the generated G-code temporarily
@@ -1356,6 +2319,22 @@
       }
       var gcodeContent = await gcodeResponse.text();
 
+      // A file Replicator or Rotate produced remembers the stored file it came
+      // from; fetch that too, so a pattern can be rebuilt from the original.
+      var originalContent = null;
+      if (jobLoaded.isTemporary && jobLoaded.sourceFile) {
+        try {
+          var originalResponse = await fetch(BASE_URL + '/api/gcode-files/file?path=' + encodeURIComponent(jobLoaded.sourceFile));
+          if (originalResponse.ok) {
+            var originalJson = await originalResponse.json();
+            var text = originalJson && (originalJson.content != null ? originalJson.content : originalJson.Content);
+            if (typeof text === 'string') originalContent = text;
+          }
+        } catch (e) {
+          originalContent = null;
+        }
+      }
+
       // Get machine limits from firmware settings
       var machineLimits = { x: 400, y: 400 };
       try {
@@ -1369,6 +2348,15 @@
 
       // Analyze G-code bounds
       var bounds = analyzeGCodeBounds(gcodeContent);
+      // Bounds come back in the file's own units; the rest of the plugin works in mm.
+      var fileInches = detectFileInches(gcodeContent);
+      if (fileInches) {
+        ['min', 'max'].forEach(function(k) {
+          bounds[k].x *= 25.4;
+          bounds[k].y *= 25.4;
+          bounds[k].z *= 25.4;
+        });
+      }
 
       // Units
       var unitsPreference = appSettings.unitsPreference || 'metric';
@@ -1394,10 +2382,25 @@
         gapX: convertToDisplay(savedSettings.gapX != null ? savedSettings.gapX : 5),
         gapY: convertToDisplay(savedSettings.gapY != null ? savedSettings.gapY : 5),
         sortByTool: savedSettings.sortByTool != null ? savedSettings.sortByTool : false,
-        skipInstances: savedSettings.skipInstances || ''
+        skipInstances: savedSettings.skipInstances || '',
+        pattern: savedSettings.pattern || 'grid',
+        hcRows: savedSettings.hcRows != null ? savedSettings.hcRows : 3,
+        hcColumns: savedSettings.hcColumns != null ? savedSettings.hcColumns : 3,
+        hcGapX: convertToDisplay(savedSettings.hcGapX != null ? savedSettings.hcGapX : 5),
+        hcGapY: convertToDisplay(savedSettings.hcGapY != null ? savedSettings.hcGapY : 5),
+        trimEnds: savedSettings.trimEnds != null ? savedSettings.trimEnds : true,
+        circCount: savedSettings.circCount != null ? savedSettings.circCount : 6,
+        circRadius: convertToDisplay(savedSettings.circRadius != null ? savedSettings.circRadius : 100),
+        circStartAngle: savedSettings.circStartAngle != null ? savedSettings.circStartAngle : 0,
+        circStyle: savedSettings.circStyle || 'circular',
+        spacingMode: savedSettings.spacingMode === 'distance' ? 'distance' : 'gap',
+        hcSpacingMode: savedSettings.hcSpacingMode === 'distance' ? 'distance' : 'gap',
+        resetToOriginal: savedSettings.resetToOriginal != null ? savedSettings.resetToOriginal : true
       };
 
       showReplicatorForm({
+        fileInches: fileInches,
+        originalContent: originalContent,
         filename: filename,
         originalSourceFile: originalSourceFile,
         gcodeContent: gcodeContent,
